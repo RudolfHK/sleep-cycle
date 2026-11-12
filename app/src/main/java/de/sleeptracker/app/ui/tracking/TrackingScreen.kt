@@ -113,6 +113,17 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
                     if (s.batteryPercent >= 0) "${s.batteryPercent} %" else "–", dim,
                 )
             }
+            val calibration = context.container.let { c ->
+                androidx.compose.runtime.produceState(90) { value = c.settings.user().noiseCalibrationDb }.value
+            }
+            val env = buildList {
+                if (s.lightActive && s.currentLux >= 0f) add(stringResource(R.string.live_light, de.sleeptracker.app.ui.journal.luxText(s.currentLux)))
+                s.currentNoiseDb?.let { add(stringResource(R.string.live_noise, de.sleeptracker.app.ui.journal.dbText(it, calibration))) }
+            }
+            if (env.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(env.joinToString("  ·  "), color = dim)
+            }
             if (s.micActive) {
                 Spacer(Modifier.height(12.dp))
                 Text(stringResource(R.string.mic_active_notice), color = dim, fontSize = 12.sp)

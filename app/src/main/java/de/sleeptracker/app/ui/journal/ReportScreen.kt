@@ -61,6 +61,10 @@ import de.sleeptracker.app.data.db.SoundEventRecord
 import de.sleeptracker.app.data.repo.SessionDetails
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.components.ActivityChart
+import de.sleeptracker.app.ui.components.LineChart
+import de.sleeptracker.app.ui.components.TimeAxis
+import de.sleeptracker.app.data.db.UserSettings
+import de.sleeptracker.analysis.EnvironmentSummary
 import de.sleeptracker.app.ui.components.EstimateNote
 import de.sleeptracker.app.ui.components.Hypnogram
 import de.sleeptracker.app.ui.components.PhaseBar
@@ -140,6 +144,8 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
     val playing by vm.playing.collectAsStateWithLifecycle()
     val playError by vm.playError.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    val user by c.settings.userSettings.collectAsStateWithLifecycle(initialValue = UserSettings())
+    val calibration = user.noiseCalibrationDb
 
     DisposableEffect(Unit) { onDispose { vm.player.stop() } }
 
@@ -179,11 +185,12 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                 StatGrid(
                     listOf(
                         stringResource(R.string.bedtime) to Fmt.time(start),
+                        stringResource(R.string.fell_asleep) to Fmt.time(start + s.sleepLatencyMinutes * 60_000L),
                         stringResource(R.string.wake_time) to Fmt.time(end),
+                        stringResource(R.string.asleep_of_in_bed) to "%.0f %%".format(s.sleepEfficiency),
                         stringResource(R.string.time_in_bed) to durationText(s.timeInBedMinutes),
                         stringResource(R.string.sleep_duration) to durationText(s.estimatedSleepMinutes),
                         stringResource(R.string.latency) to durationText(s.sleepLatencyMinutes),
-                        stringResource(R.string.efficiency) to "%.0f %%".format(s.sleepEfficiency),
                         stringResource(R.string.interruptions) to "${s.interruptions}",
                         stringResource(R.string.stability) to "%.0f %%".format(s.stability * 100),
                     ),
@@ -246,6 +253,8 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                 if (playError) Text(stringResource(R.string.recording_corrupted), color = MaterialTheme.colorScheme.error)
             }
 
+            EnvironmentCard(d, calibration)
+
             previous?.let { p -> ComparisonCard(s, p) }
 
             JournalCard(d) { note, mood, tags -> vm.saveJournal(note, mood, tags) }
@@ -273,6 +282,61 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
         )
     }
 }
+
+/** Noise and light over the night, with the per-night figures. */
+@Composable
+private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
+    val s = d.session
+    SectionCard(stringResource(R.string.environment)) {
+        Text(stringResource(R.string.noise_level), style = MaterialTheme.typography.titleSmall)
+        if (!s.hasNoiseData) {
+            Text(stringResource(R.string.noise_not_measured), style = MaterialTheme.typography.bodySmall)
+        } else {
+            StatGrid(
+                listOf(
+                    stringResource(R.string.average) to dbText(s.avgNoiseDb, calibration),
+                    stringResource(R.string.peak) to dbText(s.peakNoiseDb, calibration),
+                    stringResource(R.string.loud_time) to durationText(s.loudMinutes),
+                ),
+            )
+            LineChart(
+                d.epochs.map { if (it.hasSound && it.soundLevelDb > -100f) it.soundLevelDb + calibration else Float.NaN },
+                color = DataColors.sound(SoundEventType.NOISE_OTHER),
+                format = { "%.0f dB".format(it) },
+                description = stringResource(R.string.cd_noise_chart),
+            )
+            TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            Text(stringResource(R.string.noise_uncalibrated), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.light_level), style = MaterialTheme.typography.titleSmall)
+        if (!s.hasLightData) {
+            Text(stringResource(R.string.light_not_measured), style = MaterialTheme.typography.bodySmall)
+        } else {
+            StatGrid(
+                listOf(
+                    stringResource(R.string.average) to luxText(s.avgLux),
+                    stringResource(R.string.brightest) to luxText(s.maxLux),
+                    stringResource(R.string.dark_share) to "%.0f %%".format(s.darkPercent),
+                    stringResource(R.string.bright_time) to durationText(s.brightMinutes),
+                    stringResource(R.string.light_at_onset) to if (s.luxAtOnset >= 0) luxText(s.luxAtOnset) else "–",
+                ),
+            )
+            LineChart(
+                d.epochs.map { if (it.hasLight && it.lightLux >= 0f) it.lightLux else Float.NaN },
+                color = DataColors.light,
+                format = ::luxText,
+                reference = EnvironmentSummary.DARK_LUX,
+                description = stringResource(R.string.cd_light_chart),
+            )
+            TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            Text(stringResource(R.string.light_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+fun dbText(dbfs: Float, calibration: Int) = "%.0f dB".format(dbfs + calibration)
+fun luxText(lux: Float) = if (lux < 10f) "%.1f lx".format(lux) else "%.0f lx".format(lux)
 
 @Composable
 private fun ComparisonCard(s: SleepSession, avg: SleepSession) {

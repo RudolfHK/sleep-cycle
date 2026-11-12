@@ -53,7 +53,7 @@ Microphone ─▶ SoundEventDetector ─┘                │
 Morning: SessionAnalyzer (staging, summary) + SleepScoreCalculator ─▶ report
 ```
 
-Raw sensor samples and raw audio are never stored – only 30-second aggregates
+Ambient light (lux) is aggregated into the same epochs. Raw sensor samples and raw audio are never stored – only 30-second aggregates
 and short, encrypted excerpts of detected events.
 
 ## Algorithms (all local)
@@ -84,6 +84,20 @@ and short, encrypted excerpts of detected events.
 * **Statistics** – circular mean/SD for bed and wake times (midnight-safe),
   regularity index, efficiency, sleep debt vs. goal, phase distribution and
   sound-event frequencies per day/week/month/year/all.
+
+* **Bedroom environment** – per 30-s epoch the mean and peak microphone level
+  (from frames already analysed in memory) and, if the phone has an ambient
+  light sensor, mean/max lux (on-change sensor, last value carried forward).
+  Per night: average/peak noise, loud minutes (≥ 10 dB above the night's quiet
+  baseline), average/max light, % time dark (< 3 lx), bright minutes (≥ 30 lx),
+  light when falling asleep. Noise is shown as *estimated dB* = dBFS + an
+  adjustable calibration offset.
+* **Habits** – per night: time to bed, time fell asleep (bedtime + latency),
+  wake-up, time in bed, time asleep. Per period: circular means of these times,
+  average time in bed vs. asleep, weekday vs. weekend nights (by the morning's
+  day) and *social jet lag* (shift of mid-sleep between weekends and weekdays).
+  Statistics show a sleep-schedule chart (bed → asleep → wake bar per night), a
+  time-in-bed vs. asleep chart, and environment averages per period.
 
 > All phases, scores and sleep debt are **estimates** from phone sensors and are
 > labelled as such in the UI. This is not a medical device.
@@ -166,4 +180,6 @@ and short, encrypted excerpts of detected events.
 | Snoring, coughing, talking, noise; play/delete excerpts | `SoundEventDetector`, `RecordingRepository`, `ReportScreen`, `RecordingsScreen` |
 | Day/week/month/year statistics, notes | `StatisticsScreen`, `StatisticsCalculator`, `ReportScreen.JournalCard` |
 | Export, backup/restore, local deletion | `DataExporter`, `SettingsScreen` |
+| Noise & light levels per night, environment stats | `EpochAggregator`, `EnvironmentAnalyzer`, `ReportScreen.EnvironmentCard`, `StatisticsScreen.EnvironmentStatsCard` |
+| Bedtime / fell asleep / wake habits, time in bed vs. asleep, weekday vs. weekend | `StatisticsCalculator.schedule/socialJetLag`, `StatisticsScreen.HabitsCard`, `HabitCharts.kt` |
 | No internet permission | `AndroidManifest.xml` (`tools:node="remove"`), CI permission check |

@@ -256,4 +256,47 @@
     <string name="warn_full_screen">Full-screen alarms are not allowed; the alarm appears as a notification.</string>
     <string name="warn_battery_optimization">Battery optimisation is on. Some devices stop apps overnight; allow unrestricted battery use for reliable tracking.</string>
     <string name="woke_early">Woken %1$d min early in a light sleep phase</string>
+    <string name="fell_asleep">Fell asleep</string>
+    <string name="asleep">Asleep</string>
+    <string name="asleep_of_in_bed">Asleep / in bed</string>
+    <string name="environment">Bedroom environment</string>
+    <string name="noise_level">Noise level</string>
+    <string name="noise_not_measured">Not measured – sound tracking was off this night.</string>
+    <string name="peak">Peak</string>
+    <string name="loud_time">Loud time</string>
+    <string name="noise_uncalibrated">Estimated dB from the phone microphone (uncalibrated). Loud = 10 dB above the quiet baseline of the night.</string>
+    <string name="light_level">Light level</string>
+    <string name="light_not_measured">Not measured – no light sensor or light tracking off.</string>
+    <string name="brightest">Brightest</string>
+    <string name="dark_share">Time in darkness</string>
+    <string name="bright_time">Bright time (≥ 30 lx)</string>
+    <string name="light_at_onset">Light when falling asleep</string>
+    <string name="light_hint">Measured by the phone\'s light sensor next to the screen. Dark = below 3 lx. Placing the phone face down blocks the sensor.</string>
+    <string name="cd_noise_chart">Noise level over the night</string>
+    <string name="cd_light_chart">Light level over the night</string>
+    <string name="habits">Sleep habits</string>
+    <string name="avg_fell_asleep">Avg. fell asleep</string>
+    <string name="avg_time_in_bed">Avg. time in bed</string>
+    <string name="avg_time_asleep">Avg. time asleep</string>
+    <string name="sleep_schedule">Sleep schedule</string>
+    <string name="schedule_legend">Light part: in bed, awake · dark part: asleep · dot: fell asleep. Tap a night for details.</string>
+    <string name="cd_schedule_chart">Bedtime and wake-up time of each night</string>
+    <string name="in_bed_vs_asleep">Time in bed vs. time asleep</string>
+    <string name="cd_in_bed_chart">Time in bed and time asleep per night</string>
+    <string name="weekday_vs_weekend">Weekdays vs. weekends</string>
+    <string name="weekdays">Weekdays</string>
+    <string name="weekends">Weekends</string>
+    <string name="social_jet_lag">Social jet lag: %1$s</string>
+    <string name="social_jet_lag_hint">Shift of your mid-sleep time between weekend and weekday nights. Smaller is more regular.</string>
+    <string name="avg_noise">Avg. noise</string>
+    <string name="avg_light">Avg. light</string>
+    <string name="noise_per_night_chart">Average noise per night</string>
+    <string name="dark_per_night_chart">Time in darkness per night</string>
+    <string name="live_light">Light %1$s</string>
+    <string name="live_noise">Noise %1$s</string>
+    <string name="light_tracking">Track light level</string>
+    <string name="light_tracking_hint">Uses the ambient light sensor; very low power</string>
+    <string name="light_sensor_missing">This device has no light sensor</string>
+    <string name="noise_calibration">Noise level calibration</string>
+    <string name="noise_calibration_hint">Offset added to the microphone level to estimate dB. Phones differ; compare with a sound level meter to calibrate.</string>
 </resources>

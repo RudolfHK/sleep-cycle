@@ -26,6 +26,11 @@ class SleepTrackerApp : Application() {
         )
         // Detect sessions interrupted by a crash or process kill.
         container.appScope.launch { container.tracking.recoverIfNeeded() }
+        container.appScope.launch {
+            if (!container.runtime.environmentBackfillDone()) {
+                runCatching { container.sleep.backfillEnvironment() }.onSuccess { container.runtime.setEnvironmentBackfillDone() }
+            }
+        }
     }
 
     private fun createChannels() {

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -18,7 +20,7 @@ import androidx.room.RoomDatabase
         SleepStatistics::class,
         RecordingMetadata::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +36,33 @@ abstract class AppDatabase : RoomDatabase() {
             Room.databaseBuilder(context, AppDatabase::class.java, "sleep.db")
                 // WAL keeps writes during the night cheap and crash-safe.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                .addMigrations(MIGRATION_1_2)
                 .build()
+
+        /** v2: bedroom environment (noise peak, light) per epoch and per night. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf(
+                    "ALTER TABLE sleep_epoch ADD COLUMN soundPeakDb REAL NOT NULL DEFAULT -100",
+                    "ALTER TABLE sleep_epoch ADD COLUMN lightLux REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_epoch ADD COLUMN lightMaxLux REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_epoch ADD COLUMN hasLight INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN hasNoiseData INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN avgNoiseDb REAL NOT NULL DEFAULT -100",
+                    "ALTER TABLE sleep_session ADD COLUMN peakNoiseDb REAL NOT NULL DEFAULT -100",
+                    "ALTER TABLE sleep_session ADD COLUMN loudMinutes INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN hasLightData INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN avgLux REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_session ADD COLUMN maxLux REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_session ADD COLUMN darkPercent REAL NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN brightMinutes INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN luxAtOnset REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE user_settings ADD COLUMN lightTrackingEnabled INTEGER NOT NULL DEFAULT 1",
+                    "ALTER TABLE user_settings ADD COLUMN noiseCalibrationDb INTEGER NOT NULL DEFAULT 90",
+                ).forEach(db::execSQL)
+                // Night-level environment of older nights is back-filled in Kotlin
+                // (SleepRepository.backfillEnvironment), as SQLite math functions are not guaranteed.
+            }
+        }
     }
 }

@@ -29,6 +29,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.sleeptracker.analysis.PeriodStatistics
 import de.sleeptracker.analysis.StatisticsCalculator
+import de.sleeptracker.analysis.SleepScoreCalculator
+import de.sleeptracker.app.ui.components.PairedBarChart
+import de.sleeptracker.app.ui.components.PairedEntry
+import de.sleeptracker.app.ui.components.ScheduleChart
+import de.sleeptracker.app.ui.components.ScheduleNight
+import de.sleeptracker.app.ui.journal.dbText
+import de.sleeptracker.app.ui.journal.luxText
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import de.sleeptracker.app.AppContainer
 import de.sleeptracker.app.R
 import de.sleeptracker.app.container
@@ -72,6 +81,9 @@ data class StatsUiState(
     val stats: PeriodStatistics = PeriodStatistics.EMPTY,
     val buckets: List<Bucket> = emptyList(),
     val goalMinutes: Int = 480,
+    /** Nights of the period (oldest first, at most the last 31) for the habit charts. */
+    val nights: List<SleepSession> = emptyList(),
+    val noiseCalibration: Int = 90,
 )
 
 class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
@@ -79,7 +91,7 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<StatsUiState> = combine(selection, c.sleep.observeCompleted(), c.settings.userSettings) { (period, offset), sessions, user ->
-        compute(period, offset, sessions, user.sleepGoalMinutes)
+        compute(period, offset, sessions, user.sleepGoalMinutes).copy(noiseCalibration = user.noiseCalibrationDb)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
     fun select(p: StatPeriod) { selection.value = p to 0 }
@@ -128,7 +140,8 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
                 )
             }
         }
-        return StatsUiState(period, offset, from, to, stats, buckets, goal)
+        val nights = inRange.sortedBy { it.startTimestamp }.takeLast(31)
+        return StatsUiState(period, offset, from, to, stats, buckets, goal, nights)
     }
 
     private fun bucket(d: LocalDate, nights: List<SleepSession>) = Bucket(
@@ -207,6 +220,8 @@ fun StatisticsScreen() {
             }
         }
 
+        HabitsCard(st)
+
         SectionCard(stringResource(R.string.sleep_quality)) {
             StatGrid(
                 listOf(
@@ -271,6 +286,128 @@ fun StatisticsScreen() {
                 ),
             )
         }
+        EnvironmentStatsCard(st)
         EstimateNote()
+    }
+}
+
+private fun nightLabel(s: SleepSession, many: Boolean): String {
+    val d = runCatching { LocalDate.parse(s.sessionDate) }.getOrNull() ?: return "?"
+    return if (many) "${d.dayOfMonth}" else d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
+}
+
+/** When you go to bed, fall asleep and wake up; time in bed vs. asleep; weekday vs. weekend. */
+@Composable
+private fun HabitsCard(st: StatsUiState) {
+    val s = st.stats
+    SectionCard(stringResource(R.string.habits)) {
+        StatGrid(
+            listOf(
+                stringResource(R.string.avg_bedtime) to (s.avgBedtimeMinuteOfDay?.let(Fmt::minuteOfDay) ?: "–"),
+                stringResource(R.string.avg_fell_asleep) to (s.avgSleepOnsetMinuteOfDay?.let(Fmt::minuteOfDay) ?: "–"),
+                stringResource(R.string.avg_wake_time) to (s.avgWakeMinuteOfDay?.let(Fmt::minuteOfDay) ?: "–"),
+                stringResource(R.string.latency) to durationText(s.avgLatencyMinutes.toInt()),
+                stringResource(R.string.avg_time_in_bed) to durationText(s.avgTimeInBedMinutes.toInt()),
+                stringResource(R.string.avg_time_asleep) to durationText(s.avgSleepMinutes.toInt()),
+            ),
+        )
+        if (st.nights.isNotEmpty()) {
+            val many = st.nights.size > 7
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.sleep_schedule), style = MaterialTheme.typography.titleSmall)
+            val schedule = st.nights.map { n ->
+                val bed = SleepScoreCalculator.minutesSinceEvening(n.startTimestamp, n.zoneOffsetMinutes)
+                val asleep = (bed + n.sleepLatencyMinutes).coerceAtMost(1439)
+                val wake = (bed + n.timeInBedMinutes).coerceIn(asleep, 1439)
+                ScheduleNight(
+                    label = nightLabel(n, many),
+                    bedMinute = bed,
+                    asleepMinute = asleep,
+                    wakeMinute = wake,
+                    detail = "${Fmt.time(n.startTimestamp)} → ${Fmt.time(n.endTimestamp ?: n.startTimestamp)}",
+                )
+            }
+            ScheduleChart(schedule, description = stringResource(R.string.cd_schedule_chart))
+            Text(stringResource(R.string.schedule_legend), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.in_bed_vs_asleep), style = MaterialTheme.typography.titleSmall)
+            val inBed = stringResource(R.string.time_in_bed)
+            val asleepLabel = stringResource(R.string.asleep)
+            PairedBarChart(
+                st.nights.map { n ->
+                    PairedEntry(
+                        label = nightLabel(n, many),
+                        first = n.timeInBedMinutes / 60f,
+                        second = n.estimatedSleepMinutes / 60f,
+                        display = "${durationText(n.estimatedSleepMinutes)} / ${durationText(n.timeInBedMinutes)} (%.0f %%)".format(n.sleepEfficiency),
+                    )
+                },
+                firstLabel = inBed,
+                secondLabel = asleepLabel,
+                description = stringResource(R.string.cd_in_bed_chart),
+            )
+        }
+        val wd = s.weekdays
+        val we = s.weekends
+        if (wd != null || we != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.weekday_vs_weekend), style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth()) {
+                Spacer(Modifier.weight(1f))
+                Text(stringResource(R.string.weekdays), Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.weekends), Modifier.weight(0.7f), style = MaterialTheme.typography.labelSmall)
+            }
+            @Composable
+            fun row(label: String, a: String, b: String) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text(a, Modifier.weight(0.7f))
+                    Text(b, Modifier.weight(0.7f))
+                }
+            }
+            fun t(m: Int?) = m?.let(Fmt::minuteOfDay) ?: "–"
+            row(stringResource(R.string.nights), "${wd?.nights ?: 0}", "${we?.nights ?: 0}")
+            row(stringResource(R.string.bedtime), t(wd?.avgBedtimeMinuteOfDay), t(we?.avgBedtimeMinuteOfDay))
+            row(stringResource(R.string.wake_time), t(wd?.avgWakeMinuteOfDay), t(we?.avgWakeMinuteOfDay))
+            row(stringResource(R.string.time_in_bed), wd?.let { durationText(it.avgTimeInBedMinutes.toInt()) } ?: "–", we?.let { durationText(it.avgTimeInBedMinutes.toInt()) } ?: "–")
+            row(stringResource(R.string.asleep), wd?.let { durationText(it.avgSleepMinutes.toInt()) } ?: "–", we?.let { durationText(it.avgSleepMinutes.toInt()) } ?: "–")
+            s.socialJetLagMinutes?.let {
+                Text(stringResource(R.string.social_jet_lag, durationText(it)), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.social_jet_lag_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnvironmentStatsCard(st: StatsUiState) {
+    val s = st.stats
+    if (s.avgNoiseDb == null && s.avgLux == null) return
+    SectionCard(stringResource(R.string.environment)) {
+        StatGrid(
+            listOfNotNull(
+                s.avgNoiseDb?.let { stringResource(R.string.avg_noise) to dbText(it, st.noiseCalibration) },
+                s.avgLux?.let { stringResource(R.string.avg_light) to luxText(it) },
+                s.avgDarkPercent?.let { stringResource(R.string.dark_share) to "%.0f %%".format(it) },
+            ),
+        )
+        val noisy = st.nights.filter { it.hasNoiseData }
+        if (noisy.size >= 2) {
+            Text(stringResource(R.string.noise_per_night_chart), style = MaterialTheme.typography.labelMedium)
+            BarChart(
+                noisy.map { BarEntry(nightLabel(it, noisy.size > 7), (it.avgNoiseDb + st.noiseCalibration).coerceAtLeast(0f), dbText(it.avgNoiseDb, st.noiseCalibration)) },
+                height = 100.dp,
+                description = stringResource(R.string.cd_noise_chart),
+            )
+        }
+        val lit = st.nights.filter { it.hasLightData }
+        if (lit.size >= 2) {
+            Text(stringResource(R.string.dark_per_night_chart), style = MaterialTheme.typography.labelMedium)
+            BarChart(
+                lit.map { BarEntry(nightLabel(it, lit.size > 7), it.darkPercent, "%.0f %%".format(it.darkPercent), DataColors.light) },
+                height = 100.dp,
+                description = stringResource(R.string.cd_light_chart),
+            )
+        }
     }
 }

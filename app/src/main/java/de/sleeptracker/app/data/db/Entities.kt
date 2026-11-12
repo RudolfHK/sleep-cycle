@@ -42,6 +42,9 @@ data class UserSettings(
     val weightPhases: Int = 15,
     val weightRegularity: Int = 10,
     val createdAt: Long = System.currentTimeMillis(),
+    val lightTrackingEnabled: Boolean = true,
+    /** Added to dBFS to show an (uncalibrated) estimate of the sound level in dB. */
+    val noiseCalibrationDb: Int = 90,
 )
 
 fun UserSettings.sensorSource(): SensorSource = when {
@@ -107,6 +110,17 @@ data class SleepSession(
     val alarmTargetMillis: Long? = null,
     val alarmWindowMinutes: Int = 0,
     val alarmRangMillis: Long? = null,
+    // Bedroom environment (v2). Noise in dBFS, light in lux.
+    val hasNoiseData: Boolean = false,
+    val avgNoiseDb: Float = -100f,
+    val peakNoiseDb: Float = -100f,
+    val loudMinutes: Int = 0,
+    val hasLightData: Boolean = false,
+    val avgLux: Float = -1f,
+    val maxLux: Float = -1f,
+    val darkPercent: Float = 0f,
+    val brightMinutes: Int = 0,
+    val luxAtOnset: Float = -1f,
 )
 
 /** Compressed hypnogram: one row per run of identical stage. */
@@ -143,6 +157,10 @@ data class SleepEpochRecord(
     val snoreSeconds: Float,
     val hasMotion: Boolean,
     val hasSound: Boolean,
+    val soundPeakDb: Float = -100f,
+    val lightLux: Float = -1f,
+    val lightMaxLux: Float = -1f,
+    val hasLight: Boolean = false,
 )
 
 @Serializable

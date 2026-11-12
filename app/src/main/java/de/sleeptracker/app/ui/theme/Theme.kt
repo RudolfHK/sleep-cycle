@@ -72,6 +72,7 @@ object DataColors {
     }
 
     val movement = Color(0xFF8C9EFF)
+    val light = Color(0xFFFFD54F)
     val good = Color(0xFF66BB6A)
     val warn = Color(0xFFFFB74D)
     val bad = Color(0xFFE57373)

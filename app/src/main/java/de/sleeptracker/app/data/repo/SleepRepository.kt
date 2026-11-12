@@ -1,6 +1,8 @@
 package de.sleeptracker.app.data.repo
 
 import androidx.room.withTransaction
+import de.sleeptracker.analysis.EnvironmentAnalyzer
+import de.sleeptracker.analysis.EnvironmentSummary
 import de.sleeptracker.analysis.NightRecord
 import de.sleeptracker.analysis.SessionAnalyzer
 import de.sleeptracker.analysis.SleepScoreCalculator
@@ -119,7 +121,8 @@ class SleepRepository(
         val score = SleepScoreCalculator(user.scoreWeights())
             .score(summary, user.sleepGoalMinutes, previousBedtimes, session.zoneOffsetMinutes)
         val events = signals.soundEvents(sessionId)
-        val updated = session.copy(
+        val env = EnvironmentAnalyzer.analyze(epochs, summary.sleepOnsetMillis)
+        val updated = session.withEnvironment(env).copy(
             endTimestamp = end,
             timeInBedMinutes = summary.timeInBedMinutes,
             estimatedSleepMinutes = summary.sleepMinutes,
@@ -145,6 +148,17 @@ class SleepRepository(
             signals.replaceStages(sessionId, compressStages(sessionId, summary.stages))
         }
         return updated
+    }
+
+    /** Fills environment figures for nights recorded before they existed (once, cheap). */
+    suspend fun backfillEnvironment() {
+        for (s in sessions.allCompleted()) {
+            if (s.hasNoiseData || s.hasLightData) continue
+            val epochs = epochs(s.id)
+            if (epochs.none { it.hasSound || it.hasLight }) continue
+            val onset = s.startTimestamp + s.sleepLatencyMinutes * 60_000L
+            sessions.upsert(s.withEnvironment(EnvironmentAnalyzer.analyze(epochs, onset)))
+        }
     }
 
     suspend fun details(sessionId: Long): SessionDetails? {
@@ -215,6 +229,19 @@ class SleepRepository(
     }
 }
 
+fun SleepSession.withEnvironment(env: EnvironmentSummary) = copy(
+    hasNoiseData = env.hasNoise,
+    avgNoiseDb = env.avgNoiseDb,
+    peakNoiseDb = env.peakNoiseDb,
+    loudMinutes = env.loudMinutes,
+    hasLightData = env.hasLight,
+    avgLux = env.avgLux,
+    maxLux = env.maxLux,
+    darkPercent = env.darkPercent,
+    brightMinutes = env.brightMinutes,
+    luxAtOnset = env.luxAtOnset,
+)
+
 fun SleepSession.toNightRecord() = NightRecord(
     startMillis = startTimestamp,
     endMillis = endTimestamp ?: startTimestamp,
@@ -234,6 +261,9 @@ fun SleepSession.toNightRecord() = NightRecord(
     coughEvents = coughEvents,
     talkEvents = talkEvents,
     noiseEvents = noiseEvents,
+    avgNoiseDb = avgNoiseDb.takeIf { hasNoiseData },
+    avgLux = avgLux.takeIf { hasLightData },
+    darkPercent = darkPercent.takeIf { hasLightData },
 )
 
 fun Epoch.toRecord(sessionId: Long) = SleepEpochRecord(
@@ -247,6 +277,10 @@ fun Epoch.toRecord(sessionId: Long) = SleepEpochRecord(
     snoreSeconds = snoreSeconds,
     hasMotion = hasMotion,
     hasSound = hasSound,
+    soundPeakDb = soundPeakDb,
+    lightLux = lightLux,
+    lightMaxLux = lightMaxLux,
+    hasLight = hasLight,
 )
 
 fun SleepEpochRecord.toEpoch() = Epoch(
@@ -259,4 +293,8 @@ fun SleepEpochRecord.toEpoch() = Epoch(
     snoreSeconds = snoreSeconds,
     hasMotion = hasMotion,
     hasSound = hasSound,
+    soundPeakDb = soundPeakDb,
+    lightLux = lightLux,
+    lightMaxLux = lightMaxLux,
+    hasLight = hasLight,
 )

@@ -99,6 +99,9 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     var confirm by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
+    val hasLightSensor = remember {
+        context.getSystemService(android.hardware.SensorManager::class.java)?.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT) != null
+    }
 
     val msgDone = stringResource(R.string.msg_done)
     val msgFailed = stringResource(R.string.msg_failed)
@@ -184,6 +187,17 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             SettingSwitch(stringResource(R.string.sensor_motion), user.motionTrackingEnabled, { v ->
                 if (v || user.soundTrackingEnabled) vm.user { it.copy(motionTrackingEnabled = v) }
             })
+            SettingSwitch(
+                stringResource(R.string.light_tracking), user.lightTrackingEnabled,
+                { v -> vm.user { it.copy(lightTrackingEnabled = v) } },
+                subtitle = stringResource(if (hasLightSensor) R.string.light_tracking_hint else R.string.light_sensor_missing),
+                enabled = hasLightSensor,
+            )
+            SettingSlider(
+                stringResource(R.string.noise_calibration), user.noiseCalibrationDb.toFloat(),
+                "+${user.noiseCalibrationDb} dB", 60f..130f,
+            ) { v -> vm.user { it.copy(noiseCalibrationDb = v.toInt()) } }
+            Text(stringResource(R.string.noise_calibration_hint), style = MaterialTheme.typography.bodySmall)
             SettingSlider(stringResource(R.string.motion_sensitivity), user.motionSensitivity, "%.0f %%".format(user.motionSensitivity * 100), 0f..1f) { v ->
                 vm.user { it.copy(motionSensitivity = v) }
             }

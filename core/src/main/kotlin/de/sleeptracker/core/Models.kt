@@ -72,6 +72,13 @@ data class Epoch(
     val snoreSeconds: Float = 0f,
     val hasMotion: Boolean = false,
     val hasSound: Boolean = false,
+    /** Loudest audio frame in dBFS (−100 when no audio). */
+    val soundPeakDb: Float = -100f,
+    /** Mean ambient light in lux (−1 when no light sensor data). */
+    val lightLux: Float = -1f,
+    /** Brightest reading in lux (−1 when no light sensor data). */
+    val lightMaxLux: Float = -1f,
+    val hasLight: Boolean = false,
 ) {
     val hasSignal: Boolean get() = hasMotion || hasSound
 }

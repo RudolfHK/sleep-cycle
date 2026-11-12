@@ -77,6 +77,11 @@ data class LiveTrackingStatus(
     val epochs: Int,
     val soundEvents: Int,
     val problem: String? = null,
+    val lightActive: Boolean = false,
+    /** Latest ambient light in lux, −1 when unknown. */
+    val currentLux: Float = -1f,
+    /** Mean level of the last epoch in dBFS, null when no audio. */
+    val currentNoiseDb: Float? = null,
 )
 
 /**
@@ -110,6 +115,8 @@ class SleepTrackingService : Service(), SensorEventListener {
     @Volatile private var audioRunning = false
     @Volatile private var micActive = false
     @Volatile private var motionActive = false
+    @Volatile private var lightActive = false
+    @Volatile private var lastLux = -1f
     private var wakeLock: PowerManager.WakeLock? = null
     private var tickerJob: Job? = null
     private var decider: SmartAlarmDecider? = null
@@ -157,6 +164,8 @@ class SleepTrackingService : Service(), SensorEventListener {
             source = session.sensorSource
             val useMic = source.usesSound && micAllowed
             val useMotion = source.usesMotion
+            val useLight = user.lightTrackingEnabled &&
+                getSystemService(SensorManager::class.java)?.getDefaultSensor(Sensor.TYPE_LIGHT) != null
 
             // Restore earlier epochs (after a process restart) so smart alarm sees the whole night.
             val stored = c.sleep.epochs(session.id)
@@ -164,7 +173,7 @@ class SleepTrackingService : Service(), SensorEventListener {
                 nightEpochs.clear(); nightEpochs.addAll(stored)
                 val now = System.currentTimeMillis()
                 val elapsedEpochs = ((now - startMillis) / EPOCH_MILLIS).coerceAtLeast(0)
-                aggregator = EpochAggregator(startMillis + elapsedEpochs * EPOCH_MILLIS, useMotion, useMic)
+                aggregator = EpochAggregator(startMillis + elapsedEpochs * EPOCH_MILLIS, useMotion, useMic, useLight)
             }
             c.runtime.plan()?.takeIf { it.sessionId == session.id }?.let {
                 alarmDeadline = it.deadlineMillis
@@ -175,6 +184,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             withContext(Dispatchers.Main) {
                 if (useMotion) startMotion()
                 if (useMic) startAudio()
+                if (useLight) startLight()
                 if (!motionActive && !micActive) {
                     // Last resort: try whichever sensor is available so the night is not lost.
                     if (!useMotion) startMotion()
@@ -207,21 +217,38 @@ class SleepTrackingService : Service(), SensorEventListener {
 
     // --- Motion -----------------------------------------------------------------------------
 
+    private fun sensorHandler(): Handler {
+        val thread = sensorThread ?: HandlerThread("sensors").apply { start() }.also { sensorThread = it }
+        return Handler(thread.looper)
+    }
+
     private fun startMotion() {
         val sm = getSystemService(SensorManager::class.java) ?: return
         val accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
         motion = MotionProcessor(user.motionSensitivity)
-        val thread = HandlerThread("motion").apply { start() }
-        sensorThread = thread
         sensorManager = sm
         // ~20 Hz, delivered in batches of up to 2 s to let the sensor hub buffer samples.
-        motionActive = sm.registerListener(this, accel, 50_000, 2_000_000, Handler(thread.looper))
+        motionActive = sm.registerListener(this, accel, 50_000, 2_000_000, sensorHandler())
+    }
+
+    /** Ambient light (on-change sensor, cheap). Values are batched for up to 10 s. */
+    private fun startLight() {
+        val sm = getSystemService(SensorManager::class.java) ?: return
+        val light = sm.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return
+        sensorManager = sm
+        lightActive = sm.registerListener(this, light, SensorManager.SENSOR_DELAY_NORMAL, 10_000_000, sensorHandler())
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        val mp = motion ?: return
         // Sensor timestamps are monotonic nanos; convert to wall clock.
         val ts = System.currentTimeMillis() - (android.os.SystemClock.elapsedRealtimeNanos() - event.timestamp) / 1_000_000L
+        if (event.sensor.type == Sensor.TYPE_LIGHT) {
+            val lux = event.values[0]
+            lastLux = lux
+            synchronized(lock) { aggregator?.onLight(ts, lux) }
+            return
+        }
+        val mp = motion ?: return
         val result = mp.onSample(ts, event.values[0], event.values[1], event.values[2])
         synchronized(lock) {
             val agg = aggregator ?: return
@@ -423,6 +450,7 @@ class SleepTrackingService : Service(), SensorEventListener {
         sensorThread?.quitSafely()
         sensorThread = null
         motionActive = false
+        lightActive = false
         audioRunning = false
     }
 
@@ -490,6 +518,9 @@ class SleepTrackingService : Service(), SensorEventListener {
             epochs = synchronized(lock) { nightEpochs.size },
             soundEvents = soundEventCount,
             problem = if (!micActive && !motionActive) getString(R.string.tracking_no_sensor) else null,
+            lightActive = lightActive,
+            currentLux = lastLux,
+            currentNoiseDb = synchronized(lock) { nightEpochs.lastOrNull()?.takeIf { it.hasSound }?.soundLevelDb },
         )
         val text = buildString {
             append(getString(R.string.tracking_notification_text))

@@ -13,6 +13,7 @@ class EpochAggregator(
     sessionStartMillis: Long,
     private val motionEnabled: Boolean,
     private val soundEnabled: Boolean,
+    private val lightEnabled: Boolean = false,
 ) {
     private var currentStart = sessionStartMillis
     private var motionCount = 0
@@ -22,6 +23,12 @@ class EpochAggregator(
     private var energySum = 0.0
     private var events = 0
     private var snoreSeconds = 0f
+    private var peakDb = -100f
+    // Light is an on-change sensor: the last reading is carried into following epochs.
+    private var lastLux = -1f
+    private var luxSum = 0.0
+    private var luxCount = 0
+    private var luxMax = -1f
     private var motionSamplesSeen = false
 
     /** Completed epochs not yet collected by [drain]. */
@@ -44,6 +51,16 @@ class EpochAggregator(
         frames++
         if (active) activeFrames++
         energySum += 10.0.pow(levelDb / 10.0)
+        if (levelDb > peakDb) peakDb = levelDb
+    }
+
+    fun onLight(timestampMillis: Long, lux: Float) {
+        advanceTo(timestampMillis)
+        val v = lux.coerceAtLeast(0f)
+        lastLux = v
+        luxSum += v
+        luxCount++
+        if (v > luxMax) luxMax = v
     }
 
     fun onSoundEvent(timestampMillis: Long, isSnore: Boolean = false, durationMillis: Long = 0) {
@@ -91,6 +108,10 @@ class EpochAggregator(
             snoreSeconds = snoreSeconds.coerceAtMost(30f),
             hasMotion = motionEnabled && (motionSamplesSeen || motionCount > 0),
             hasSound = hasSound,
+            soundPeakDb = if (frames > 0) peakDb else -100f,
+            lightLux = if (luxCount > 0) (luxSum / luxCount).toFloat() else -1f,
+            lightMaxLux = if (luxCount > 0) luxMax else -1f,
+            hasLight = lightEnabled && luxCount > 0,
         )
     }
 
@@ -102,6 +123,13 @@ class EpochAggregator(
         energySum = 0.0
         events = 0
         snoreSeconds = 0f
+        peakDb = -100f
         motionSamplesSeen = false
+        // Start the next epoch with the carried-over light value.
+        if (lastLux >= 0f) {
+            luxSum = lastLux.toDouble(); luxCount = 1; luxMax = lastLux
+        } else {
+            luxSum = 0.0; luxCount = 0; luxMax = -1f
+        }
     }
 }

@@ -78,7 +78,8 @@ class DataExporter(
         val sb = StringBuilder()
         sb.append(
             "date,start_utc,end_utc,time_in_bed_min,sleep_min,latency_min,efficiency_pct,score,awake_min,light_min,deep_min,rem_min," +
-                "interruptions,snore_events,snore_seconds,cough_events,talk_events,noise_events,tracking_mode,sensors,status,note,tags\n",
+                "interruptions,snore_events,snore_seconds,cough_events,talk_events,noise_events,tracking_mode,sensors,status," +
+                "fell_asleep_utc,avg_noise_dbfs,peak_noise_dbfs,loud_min,avg_lux,max_lux,dark_pct,bright_min,note,tags\n",
         )
         val journals = db.journalDao().all().associateBy { it.sessionId }
         for (s in db.sessionDao().all()) {
@@ -93,6 +94,14 @@ class DataExporter(
                     s.awakeMinutes, s.lightMinutes, s.deepMinutes, s.remMinutes, s.interruptions,
                     s.snoreEvents, s.snoreSeconds, s.coughEvents, s.talkEvents, s.noiseEvents,
                     s.trackingMode, s.sensorSource, s.sessionStatus,
+                    Instant.ofEpochMilli(s.startTimestamp + s.sleepLatencyMinutes * 60_000L).atOffset(ZoneOffset.UTC).toString(),
+                    if (s.hasNoiseData) "%.1f".format(java.util.Locale.ROOT, s.avgNoiseDb) else "",
+                    if (s.hasNoiseData) "%.1f".format(java.util.Locale.ROOT, s.peakNoiseDb) else "",
+                    if (s.hasNoiseData) s.loudMinutes else "",
+                    if (s.hasLightData) "%.1f".format(java.util.Locale.ROOT, s.avgLux) else "",
+                    if (s.hasLightData) "%.1f".format(java.util.Locale.ROOT, s.maxLux) else "",
+                    if (s.hasLightData) "%.0f".format(java.util.Locale.ROOT, s.darkPercent) else "",
+                    if (s.hasLightData) s.brightMinutes else "",
                     csv(j?.note ?: ""), csv(j?.personalTags ?: ""),
                 ).joinToString(","),
             ).append('\n')

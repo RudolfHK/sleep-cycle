@@ -45,6 +45,7 @@ class RuntimeStore(private val context: Context) {
     private val keyActiveSession = longPreferencesKey("active_session")
     private val keyAlarmPlan = stringPreferencesKey("alarm_plan")
     private val keyOnboarding = booleanPreferencesKey("onboarding_done")
+    private val keyEnvBackfill = booleanPreferencesKey("environment_backfill_v2")
 
     val activeSessionId: Flow<Long?> = context.runtimeDataStore.data.map { it[keyActiveSession]?.takeIf { id -> id > 0 } }
     val alarmPlan: Flow<AlarmPlan?> = context.runtimeDataStore.data.map { p -> p[keyAlarmPlan]?.let(::decode) }
@@ -73,6 +74,12 @@ class RuntimeStore(private val context: Context) {
             if (next == null) prefs.remove(keyAlarmPlan) else prefs[keyAlarmPlan] = json.encodeToString(AlarmPlan.serializer(), next)
         }
         return result
+    }
+
+    suspend fun environmentBackfillDone(): Boolean = context.runtimeDataStore.data.first()[keyEnvBackfill] ?: false
+
+    suspend fun setEnvironmentBackfillDone() {
+        context.runtimeDataStore.edit { it[keyEnvBackfill] = true }
     }
 
     suspend fun setOnboardingDone() {

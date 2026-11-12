@@ -28,6 +28,35 @@ data class NightRecord(
     val coughEvents: Int,
     val talkEvents: Int,
     val noiseEvents: Int,
+    /** Average noise of the night in dBFS, null when not measured. */
+    val avgNoiseDb: Float? = null,
+    /** Average light in lux, null when not measured. */
+    val avgLux: Float? = null,
+    /** Percent of the night that was dark, null when not measured. */
+    val darkPercent: Float? = null,
+) {
+    /** Time the user fell asleep (estimated). */
+    val sleepOnsetMillis: Long get() = startMillis + latencyMinutes * 60_000L
+
+    /** Night counts as weekend when the morning is a Saturday or Sunday. */
+    val isWeekend: Boolean
+        get() {
+            val days = Math.floorDiv(endMillis / 60_000L + zoneOffsetMinutes, 1440L)
+            // 1970-01-01 was a Thursday (ISO day 4).
+            val isoDay = Math.floorMod(days + 3, 7L) + 1
+            return isoDay == 6L || isoDay == 7L
+        }
+}
+
+/** Averages for one group of nights (e.g. weekdays). */
+data class ScheduleSummary(
+    val nights: Int,
+    val avgBedtimeMinuteOfDay: Int?,
+    val avgWakeMinuteOfDay: Int?,
+    val avgSleepMinutes: Float,
+    val avgTimeInBedMinutes: Float,
+    /** Circular mean of the mid-point between falling asleep and waking. */
+    val midSleepMinuteOfDay: Int?,
 )
 
 data class PeriodStatistics(
@@ -59,6 +88,16 @@ data class PeriodStatistics(
     val avgNoiseEvents: Float,
     /** Accumulated (goal − sleep) in minutes over the period; positive = deficit. Estimate only. */
     val sleepDebtMinutes: Int,
+    val avgTimeInBedMinutes: Float = 0f,
+    /** Circular mean of the estimated time of falling asleep. */
+    val avgSleepOnsetMinuteOfDay: Int? = null,
+    val weekdays: ScheduleSummary? = null,
+    val weekends: ScheduleSummary? = null,
+    /** |mid-sleep weekend − mid-sleep weekdays| in minutes, null without both groups. */
+    val socialJetLagMinutes: Int? = null,
+    val avgNoiseDb: Float? = null,
+    val avgLux: Float? = null,
+    val avgDarkPercent: Float? = null,
 ) {
     companion object {
         val EMPTY = PeriodStatistics(
@@ -103,7 +142,42 @@ object StatisticsCalculator {
             avgTalkEvents = nights.sumOf { it.talkEvents } / n,
             avgNoiseEvents = nights.sumOf { it.noiseEvents } / n,
             sleepDebtMinutes = nights.sumOf { goalMinutes - it.sleepMinutes },
+            avgTimeInBedMinutes = nights.sumOf { it.timeInBedMinutes } / n,
+            avgSleepOnsetMinuteOfDay = circularMeanAndSd(nights.map { minuteOfDay(it.sleepOnsetMillis, it.zoneOffsetMinutes) }).first,
+            weekdays = schedule(nights.filter { !it.isWeekend }),
+            weekends = schedule(nights.filter { it.isWeekend }),
+            socialJetLagMinutes = socialJetLag(nights),
+            avgNoiseDb = nights.mapNotNull { it.avgNoiseDb }.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+            avgLux = nights.mapNotNull { it.avgLux }.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+            avgDarkPercent = nights.mapNotNull { it.darkPercent }.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
         )
+    }
+
+    fun schedule(nights: List<NightRecord>): ScheduleSummary? {
+        if (nights.isEmpty()) return null
+        val n = nights.size.toFloat()
+        return ScheduleSummary(
+            nights = nights.size,
+            avgBedtimeMinuteOfDay = circularMeanAndSd(nights.map { minuteOfDay(it.startMillis, it.zoneOffsetMinutes) }).first,
+            avgWakeMinuteOfDay = circularMeanAndSd(nights.map { minuteOfDay(it.endMillis, it.zoneOffsetMinutes) }).first,
+            avgSleepMinutes = nights.sumOf { it.sleepMinutes } / n,
+            avgTimeInBedMinutes = nights.sumOf { it.timeInBedMinutes } / n,
+            midSleepMinuteOfDay = circularMeanAndSd(nights.map { midSleep(it) }).first,
+        )
+    }
+
+    private fun midSleep(r: NightRecord): Int {
+        val onset = r.sleepOnsetMillis
+        val mid = onset + (r.endMillis - onset).coerceAtLeast(0) / 2
+        return minuteOfDay(mid, r.zoneOffsetMinutes)
+    }
+
+    /** Difference between weekend and weekday mid-sleep (circular, minutes). */
+    fun socialJetLag(nights: List<NightRecord>): Int? {
+        val wd = schedule(nights.filter { !it.isWeekend })?.midSleepMinuteOfDay ?: return null
+        val we = schedule(nights.filter { it.isWeekend })?.midSleepMinuteOfDay ?: return null
+        val d = Math.floorMod(we - wd, 1440)
+        return if (d > 720) 1440 - d else d
     }
 
     fun minuteOfDay(epochMillis: Long, zoneOffsetMinutes: Int): Int =

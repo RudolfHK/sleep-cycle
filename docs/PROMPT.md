@@ -155,3 +155,49 @@ usage display.
 3. README: architecture, algorithms, permissions, privacy, limitations.
 4. The acceptance checklist of the original specification, with each item
    mapped to the code that implements it.
+
+---
+
+# Iteration 2 — environment (noise & light) and sleep habits
+
+Original request: *"Does the app also track noise and light levels during the
+night? And does it properly track habits of when going to sleep, how much time
+is spent in bed and how much was slept, with local storage and nice stats?"*
+
+Refined prompt:
+
+> Extend the existing app (same stack, same offline/privacy rules) with
+> bedroom-environment tracking and a sleep-habits view. Keep the existing data
+> and add a Room migration (v1 → v2); old backups must still restore.
+>
+> **1. Noise level.** Per 30-s epoch, store the mean and the peak audio level
+> (dBFS, from the frames already analysed in memory — no extra recording).
+> Display it as *estimated dB* = dBFS + a calibration offset (default 90,
+> adjustable in Settings, labelled "uncalibrated estimate"). Per night: average
+> level, peak level, minutes that were "loud" (epoch mean ≥ 10 dB above the
+> night's quiet baseline = 10th percentile).
+>
+> **2. Light level.** Use the ambient light sensor (`TYPE_LIGHT`, lux) when
+> available and enabled (new setting, default on). It is an on-change sensor, so
+> carry the last value into epochs without a new reading. Per epoch: mean and max
+> lux. Per night: average lux, max lux, % of time dark (< 3 lx), minutes bright
+> (≥ 30 lx), lux at sleep onset. Missing sensor ⇒ "not available", never zero.
+>
+> **3. Habits.** For every night derive: time to bed (start of tracking), time
+> fell asleep (start + latency), wake-up time, time in bed, time asleep,
+> efficiency. Statistics per period add: circular-mean "fell asleep" time,
+> average time in bed vs. time asleep, weekday vs. weekend nights (by the
+> morning's day of week; Sat/Sun mornings = weekend) for bedtime, wake-up and
+> sleep duration, and *social jet lag* = difference of mid-sleep between weekend
+> and weekday nights. Environment averages per period (noise, light, dark %).
+>
+> **4. UI.** Report: an *Environment* card with noise and light graphs over the
+> night and the per-night figures. Statistics: a *Habits* card with a sleep
+> schedule chart (one floating bar per night from bedtime to wake-up on an
+> evening→morning time axis, with a fell-asleep marker), a time-in-bed vs.
+> time-asleep paired bar chart, the weekday/weekend table and social jet lag; an
+> *Environment* card with period averages. Tracking screen shows live light and
+> noise. CSV export includes the new columns.
+>
+> **5. Tests.** Unit tests for light carry-forward, noise peak aggregation,
+> environment summary, weekday/weekend split and social jet lag.

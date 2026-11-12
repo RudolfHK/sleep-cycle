@@ -255,4 +255,47 @@
     <string name="warn_full_screen">Vollbild-Wecker sind nicht erlaubt; der Wecker erscheint als Benachrichtigung.</string>
     <string name="warn_battery_optimization">Die Akkuoptimierung ist aktiv. Manche Geräte beenden Apps über Nacht; erlaube uneingeschränkte Akkunutzung für zuverlässiges Tracking.</string>
     <string name="woke_early">%1$d Min. früher in einer Leichtschlafphase geweckt</string>
+    <string name="fell_asleep">Eingeschlafen</string>
+    <string name="asleep">Geschlafen</string>
+    <string name="asleep_of_in_bed">Schlaf / Bettzeit</string>
+    <string name="environment">Schlafumgebung</string>
+    <string name="noise_level">Geräuschpegel</string>
+    <string name="noise_not_measured">Nicht gemessen – Geräusch-Tracking war in dieser Nacht aus.</string>
+    <string name="peak">Spitze</string>
+    <string name="loud_time">Laute Zeit</string>
+    <string name="noise_uncalibrated">Geschätzte dB vom Smartphone-Mikrofon (nicht kalibriert). Laut = 10 dB über dem ruhigen Grundpegel der Nacht.</string>
+    <string name="light_level">Helligkeit</string>
+    <string name="light_not_measured">Nicht gemessen – kein Lichtsensor oder Licht-Tracking aus.</string>
+    <string name="brightest">Am hellsten</string>
+    <string name="dark_share">Zeit im Dunkeln</string>
+    <string name="bright_time">Helle Zeit (≥ 30 lx)</string>
+    <string name="light_at_onset">Licht beim Einschlafen</string>
+    <string name="light_hint">Gemessen mit dem Lichtsensor neben dem Display. Dunkel = unter 3 lx. Liegt das Telefon mit dem Display nach unten, ist der Sensor verdeckt.</string>
+    <string name="cd_noise_chart">Geräuschpegel im Verlauf der Nacht</string>
+    <string name="cd_light_chart">Helligkeit im Verlauf der Nacht</string>
+    <string name="habits">Schlafgewohnheiten</string>
+    <string name="avg_fell_asleep">Ø eingeschlafen</string>
+    <string name="avg_time_in_bed">Ø Zeit im Bett</string>
+    <string name="avg_time_asleep">Ø Schlafzeit</string>
+    <string name="sleep_schedule">Schlafrhythmus</string>
+    <string name="schedule_legend">Heller Teil: im Bett, wach · dunkler Teil: Schlaf · Punkt: eingeschlafen. Tippe auf eine Nacht für Details.</string>
+    <string name="cd_schedule_chart">Schlafens- und Aufwachzeit jeder Nacht</string>
+    <string name="in_bed_vs_asleep">Zeit im Bett vs. Schlafzeit</string>
+    <string name="cd_in_bed_chart">Zeit im Bett und Schlafzeit pro Nacht</string>
+    <string name="weekday_vs_weekend">Werktage vs. Wochenende</string>
+    <string name="weekdays">Werktage</string>
+    <string name="weekends">Wochenende</string>
+    <string name="social_jet_lag">Sozialer Jetlag: %1$s</string>
+    <string name="social_jet_lag_hint">Verschiebung deiner Schlafmitte zwischen Wochenend- und Werktagsnächten. Kleiner ist regelmäßiger.</string>
+    <string name="avg_noise">Ø Geräuschpegel</string>
+    <string name="avg_light">Ø Helligkeit</string>
+    <string name="noise_per_night_chart">Ø Geräuschpegel pro Nacht</string>
+    <string name="dark_per_night_chart">Zeit im Dunkeln pro Nacht</string>
+    <string name="live_light">Licht %1$s</string>
+    <string name="live_noise">Geräusch %1$s</string>
+    <string name="light_tracking">Helligkeit aufzeichnen</string>
+    <string name="light_tracking_hint">Nutzt den Umgebungslichtsensor; sehr stromsparend</string>
+    <string name="light_sensor_missing">Dieses Gerät hat keinen Lichtsensor</string>
+    <string name="noise_calibration">Kalibrierung Geräuschpegel</string>
+    <string name="noise_calibration_hint">Versatz, der zum Mikrofonpegel addiert wird, um dB zu schätzen. Smartphones unterscheiden sich; zum Kalibrieren mit einem Schallpegelmesser vergleichen.</string>
 </resources>
