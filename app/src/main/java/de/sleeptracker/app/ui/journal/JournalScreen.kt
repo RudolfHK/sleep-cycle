@@ -11,8 +11,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Surface
+import de.sleeptracker.app.ui.components.ScreenHeader
+import de.sleeptracker.app.ui.components.SectionLabel
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +56,14 @@ fun JournalScreen(onOpen: (Long) -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Text(stringResource(R.string.tab_journal), style = MaterialTheme.typography.headlineSmall)
+            ScreenHeader(
+                stringResource(R.string.tab_journal),
+                subtitle = if (filtered.isEmpty()) null else stringResource(
+                    R.string.journal_summary, filtered.size,
+                    durationText(filtered.sumOf { it.estimatedSleepMinutes } / filtered.size),
+                    filtered.sumOf { it.sleepQualityScore } / filtered.size,
+                ),
+            )
             ChoiceChips(
                 options = JournalRange.entries.toList(),
                 selected = range,
@@ -71,10 +85,9 @@ fun JournalScreen(onOpen: (Long) -> Unit) {
         }
         grouped.forEach { (month, list) ->
             item(key = "h$month") {
-                Text(
+                SectionLabel(
                     if (month == LocalDate.MIN) "–" else Fmt.monthYear(month),
-                    Modifier.padding(top = 12.dp),
-                    style = MaterialTheme.typography.titleSmall,
+                    Modifier.padding(top = 12.dp, bottom = 2.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -85,13 +98,21 @@ fun JournalScreen(onOpen: (Long) -> Unit) {
 
 @Composable
 private fun JournalEntry(s: SleepSession, onClick: () -> Unit) {
-    Card(
+    Surface(
         Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(3.dp).fillMaxHeight().background(DataColors.score(s.sleepQualityScore)))
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(Fmt.date(s.sessionDate), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    runCatching { LocalDate.parse(s.sessionDate) }.getOrNull()?.let { "${it.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())}, ${Fmt.date(it)}" } ?: s.sessionDate,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(durationText(s.estimatedSleepMinutes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
                     "${Fmt.time(s.startTimestamp)} – ${s.endTimestamp?.let { Fmt.time(it) } ?: "?"}" +
@@ -101,7 +122,11 @@ private fun JournalEntry(s: SleepSession, onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Text("${s.sleepQualityScore}", style = MaterialTheme.typography.displaySmall, color = DataColors.score(s.sleepQualityScore))
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${s.sleepQualityScore}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(stringResource(R.string.sleep_score).uppercase(), style = de.sleeptracker.app.ui.theme.OverlineStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            }
         }
     }
 }

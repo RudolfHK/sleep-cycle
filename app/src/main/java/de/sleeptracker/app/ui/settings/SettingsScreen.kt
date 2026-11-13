@@ -143,7 +143,7 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.tab_settings), style = MaterialTheme.typography.headlineSmall)
+        de.sleeptracker.app.ui.components.ScreenHeader(stringResource(R.string.tab_settings), subtitle = stringResource(R.string.settings_subtitle))
         SnackbarHost(snackbar)
 
         SectionCard(stringResource(R.string.settings_alarm)) {

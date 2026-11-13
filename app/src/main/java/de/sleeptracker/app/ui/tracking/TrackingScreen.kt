@@ -59,7 +59,8 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
     var stopping by remember { mutableStateOf(false) }
     var waitedForStart by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val dim = Color(0xFF8A8FB0)
+    // Very dim, warm tones: readable at night without lighting up the room.
+    val dim = Color(0xFF8C7A68)
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -134,7 +135,8 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
             Button(
                 onClick = { confirm = true },
                 enabled = !stopping,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1C1F33), contentColor = dim),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1512), contentColor = Color(0xFFB0703A)),
+                shape = androidx.compose.material3.MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) { Text(stringResource(R.string.tracking_stop)) }
         }

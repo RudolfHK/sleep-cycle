@@ -23,6 +23,23 @@ Without an Android SDK configured, Gradle builds only the pure-Kotlin modules.
 CI (`.github/workflows/build.yml`) runs the tests, builds the APK and checks that
 the APK requests no network permission.
 
+## Design
+
+Dark theme by default (light selectable) with a single orange accent for
+primary actions and selection, sharp 2–8 dp corners, flat outlined panels with
+uppercase section labels, and tabular figures. Each top-level screen has the
+same header; the screen's primary action (e.g. *Start sleep tracking*) sits in
+a fixed bottom bar.
+
+All time-series charts open zoomed out on the whole period. Zoom in with a
+pinch, a double-tap or the panel's +/− buttons; drag sideways to pan when
+zoomed; reset or open full screen from the panel header. Statistics default to
+*All* and include KPIs with change vs. the previous period, per-night duration
+with a 7-night average, goal rate and streak, monthly overview with drill-down,
+score trend, sleep schedule, time in bed vs. asleep, weekday and weekend
+habits, sleep by weekday, duration distribution, best/worst night, sleep debt,
+phases, sounds and environment.
+
 ## Architecture
 
 ```

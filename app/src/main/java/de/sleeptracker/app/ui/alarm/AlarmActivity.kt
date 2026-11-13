@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -134,7 +135,7 @@ private fun AlarmContent(ring: RingUiState?, onSnooze: () -> Unit, onStop: () ->
             Spacer(Modifier.height(48.dp))
             val snoozeMinutes = ring?.nextSnoozeMinutes
             if (snoozeMinutes != null) {
-                Button(onClick = onSnooze, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+                Button(onClick = onSnooze, modifier = Modifier.fillMaxWidth().height(72.dp), shape = MaterialTheme.shapes.small) {
                     Text(stringResource(R.string.snooze_minutes, snoozeMinutes), style = MaterialTheme.typography.titleLarge)
                 }
                 Spacer(Modifier.height(16.dp))
@@ -144,8 +145,9 @@ private fun AlarmContent(ring: RingUiState?, onSnooze: () -> Unit, onStop: () ->
                 Modifier
                     .fillMaxWidth()
                     .height(72.dp)
-                    .clip(RoundedCornerShape(36.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
                     .combinedClickable(
                         role = Role.Button,
                         onClick = { if (!confirm) onStop() },
@@ -155,7 +157,7 @@ private fun AlarmContent(ring: RingUiState?, onSnooze: () -> Unit, onStop: () ->
             ) {
                 Text(
                     stringResource(if (confirm) R.string.alarm_stop_hold else R.string.alarm_stop),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleLarge,
                 )
             }

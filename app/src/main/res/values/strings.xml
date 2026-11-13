@@ -316,4 +316,35 @@
     <string name="source_sleep_cycle">Sleep Cycle</string>
     <string name="sleep_cycle_regularity">Regularity (Sleep Cycle)</string>
     <string name="breathing_disruptions">Breathing disruptions</string>
+    <string name="tonight">Tonight</string>
+    <string name="edit_time">Change wake-up time</string>
+    <string name="settings_subtitle">Alarm, tracking, data and privacy</string>
+    <string name="journal_summary">%1$d nights · Ø %2$s · Ø score %3$d</string>
+    <string name="n_nights">%1$d nights</string>
+    <string name="n_of_m_nights">%1$d of %2$d nights</string>
+    <string name="delta_vs_previous">%1$s vs. previous</string>
+    <string name="later_by">%1$s later</string>
+    <string name="earlier_by">%1$s earlier</string>
+    <string name="unchanged">Unchanged</string>
+    <string name="goal_reached">Goal reached</string>
+    <string name="longest_streak">Longest streak</string>
+    <string name="goal_is">Goal %1$s</string>
+    <string name="duration_legend">Bars: nights (bright = goal reached) · line: 7-night average · dashed: goal</string>
+    <string name="open_night">Open report for %1$s</string>
+    <string name="monthly_overview">Monthly overview</string>
+    <string name="zoom_into">Zoom into %1$s</string>
+    <string name="monthly_hint">Tap a month, then zoom into it.</string>
+    <string name="social_jet_lag_label">Social jet lag</string>
+    <string name="sleep_by_weekday">Sleep by weekday</string>
+    <string name="duration_distribution">Sleep duration distribution</string>
+    <string name="best_and_worst">Best and worst night</string>
+    <string name="best_night">Best night</string>
+    <string name="worst_night">Worst night</string>
+    <string name="chart_expand">Full screen</string>
+    <string name="chart_zoom_in">Zoom in</string>
+    <string name="chart_zoom_out">Zoom out</string>
+    <string name="chart_zoom_reset">Show all</string>
+    <string name="chart_zoom_hint">Pinch, double-tap or + to zoom in</string>
+    <string name="chart_zoom_hint_zoomed">Drag sideways to scroll · double-tap to show all</string>
+    <string name="close">Close</string>
 </resources>

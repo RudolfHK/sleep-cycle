@@ -253,3 +253,46 @@ Refined prompt:
 > transaction. Imported nights have no hypnogram/epochs: the report says so and
 > statistics average sleep phases only over nights that have phase data. Room
 > migration v2 → v3 for the new columns.
+
+---
+
+# Iteration 4 — professional dark/orange design, detailed zoomable statistics
+
+Original request: *"Adjust the layout and design professionally into a dark theme
+with orange; corners can be edgier, not as round. Stats should be more detailed,
+zoomed out from the start with zoom in on demand or on click. Make the app feel
+more professionally designed — layout, where buttons are, etc."*
+
+Refined prompt:
+
+> **Visual system.** Dark theme is the default (light remains selectable) with a
+> near-black, slightly warm neutral background, two raised surface levels and a
+> single orange accent (`#FF8A1F`, pressed/secondary amber) used for primary
+> actions, selection and highlights only. Data colours stay distinguishable from
+> the accent and from each other. Shapes are sharp: 2–8 dp corner radii (no
+> pills), applied through `MaterialTheme.shapes` and to chart bars. Panels are
+> flat with a 1 dp hairline outline instead of tinted cards; section titles are
+> small uppercase labels; numbers use tabular figures.
+>
+> **Layout.** Every top-level screen starts with the same left-aligned header
+> (title + context line). The primary action of a screen sits in a fixed
+> bottom bar (e.g. *Start sleep tracking* on the Sleep screen), never mid-page.
+> Secondary actions are icon buttons in headers or rows. Warnings collapse into
+> one banner. Settings are a grouped list with section labels and dividers.
+> Report: hero row (score + three key metrics) followed by detail panels.
+>
+> **Zoomable charts.** All time-series charts (sleep duration, score, schedule,
+> time in bed vs. asleep, noise, light, hypnogram) open *zoomed out* showing the
+> entire selected period. Users zoom in by pinch, double-tap, or the panel's
+> +/− buttons; when zoomed, a one-finger horizontal drag pans (vertical page
+> scroll is never captured). A reset button and an expand button (full-screen
+> chart dialog) are always available. Tapping a bar/point shows its value; in
+> monthly views a tap offers "zoom into this month".
+>
+> **More detailed statistics.** Default period: *All*. KPI strip with change
+> vs. the previous period (sleep, score, efficiency, bedtime). Per-night duration
+> bars with a 7-night rolling average and goal line; score line; goal reached
+> (% of nights) and longest streak; duration distribution histogram; average
+> sleep per weekday; best and worst night (tap to open); plus the existing
+> habits, regularity, phases, sounds and environment sections. Calculations live
+> in `:sleepanalysis` and are unit tested.

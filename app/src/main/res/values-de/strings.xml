@@ -315,4 +315,35 @@
     <string name="source_sleep_cycle">Sleep Cycle</string>
     <string name="sleep_cycle_regularity">Regelmäßigkeit (Sleep Cycle)</string>
     <string name="breathing_disruptions">Atemaussetzer</string>
+    <string name="tonight">Heute Nacht</string>
+    <string name="edit_time">Weckzeit ändern</string>
+    <string name="settings_subtitle">Wecker, Tracking, Daten und Datenschutz</string>
+    <string name="journal_summary">%1$d Nächte · Ø %2$s · Ø Bewertung %3$d</string>
+    <string name="n_nights">%1$d Nächte</string>
+    <string name="n_of_m_nights">%1$d von %2$d Nächten</string>
+    <string name="delta_vs_previous">%1$s ggü. vorher</string>
+    <string name="later_by">%1$s später</string>
+    <string name="earlier_by">%1$s früher</string>
+    <string name="unchanged">Unverändert</string>
+    <string name="goal_reached">Ziel erreicht</string>
+    <string name="longest_streak">Längste Serie</string>
+    <string name="goal_is">Ziel %1$s</string>
+    <string name="duration_legend">Balken: Nächte (hell = Ziel erreicht) · Linie: 7-Nächte-Schnitt · gestrichelt: Ziel</string>
+    <string name="open_night">Bericht vom %1$s öffnen</string>
+    <string name="monthly_overview">Monatsübersicht</string>
+    <string name="zoom_into">%1$s im Detail ansehen</string>
+    <string name="monthly_hint">Tippe auf einen Monat, um ihn im Detail anzusehen.</string>
+    <string name="social_jet_lag_label">Sozialer Jetlag</string>
+    <string name="sleep_by_weekday">Schlaf nach Wochentag</string>
+    <string name="duration_distribution">Verteilung der Schlafdauer</string>
+    <string name="best_and_worst">Beste und schlechteste Nacht</string>
+    <string name="best_night">Beste Nacht</string>
+    <string name="worst_night">Schlechteste Nacht</string>
+    <string name="chart_expand">Vollbild</string>
+    <string name="chart_zoom_in">Vergrößern</string>
+    <string name="chart_zoom_out">Verkleinern</string>
+    <string name="chart_zoom_reset">Alles zeigen</string>
+    <string name="chart_zoom_hint">Zum Vergrößern zwei Finger, Doppeltippen oder +</string>
+    <string name="chart_zoom_hint_zoomed">Seitlich ziehen zum Verschieben · Doppeltippen zeigt alles</string>
+    <string name="close">Schließen</string>
 </resources>

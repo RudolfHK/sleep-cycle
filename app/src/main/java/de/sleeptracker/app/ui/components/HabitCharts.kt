@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clipToBounds
+import kotlin.math.roundToInt
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +56,7 @@ fun LineChart(
     reference: Float? = null,
     height: Dp = 90.dp,
     description: String,
+    zoom: ChartZoomState? = null,
 ) {
     var selected by remember(values) { mutableStateOf<Int?>(null) }
     val valid = values.filter { !it.isNaN() }
@@ -74,28 +77,41 @@ fun LineChart(
             Modifier
                 .fillMaxWidth()
                 .height(height)
+                .clipToBounds()
                 .semantics { contentDescription = description }
-                .pointerInput(values) {
-                    detectTapGestures { p -> if (values.isNotEmpty()) selected = (p.x / size.width * values.size).toInt().coerceIn(0, values.size - 1) }
+                .chartZoomGestures(zoom)
+                .pointerInput(values, zoom) {
+                    detectTapGestures(
+                        onTap = { p ->
+                            if (values.size >= 2) {
+                                val f = zoom?.toData(p.x / size.width) ?: (p.x / size.width)
+                                selected = (f * (values.size - 1)).roundToInt().coerceIn(0, values.size - 1)
+                            }
+                        },
+                        onDoubleTap = { p -> zoom?.toggle(p.x / size.width) },
+                    )
                 },
         ) {
             if (values.size < 2) return@Canvas
-            val step = size.width / (values.size - 1)
+            fun xOf(i: Int): Float {
+                val f = i.toFloat() / (values.size - 1)
+                return (zoom?.toView(f) ?: f) * size.width
+            }
             fun y(v: Float) = size.height - (v - min) / (max - min) * size.height * 0.9f - size.height * 0.05f
             val path = Path()
             var drawing = false
             values.forEachIndexed { i, v ->
                 if (v.isNaN()) { drawing = false; return@forEachIndexed }
-                val x = i * step
+                val x = xOf(i)
                 if (!drawing) path.moveTo(x, y(v)) else path.lineTo(x, y(v))
                 drawing = true
             }
-            drawPath(path, color, style = Stroke(width = 2.5f))
+            drawPath(path, color, style = Stroke(width = 2f))
             reference?.takeIf { it in min..max }?.let {
                 drawLine(refColor, Offset(0f, y(it)), Offset(size.width, y(it)), 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
             }
             selected?.let { i ->
-                val x = i * step
+                val x = xOf(i)
                 drawLine(color.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), 1.5f)
             }
         }
@@ -116,7 +132,13 @@ data class ScheduleNight(
  * evening→morning axis; a dot marks when the user fell asleep. Tap a bar for details.
  */
 @Composable
-fun ScheduleChart(nights: List<ScheduleNight>, modifier: Modifier = Modifier, description: String) {
+fun ScheduleChart(
+    nights: List<ScheduleNight>,
+    modifier: Modifier = Modifier,
+    description: String,
+    zoom: ChartZoomState? = null,
+    height: Dp = 200.dp,
+) {
     var selected by remember(nights) { mutableStateOf<Int?>(null) }
     if (nights.isEmpty()) return
     // Axis range: rounded to whole hours around the data.
@@ -136,7 +158,7 @@ fun ScheduleChart(nights: List<ScheduleNight>, modifier: Modifier = Modifier, de
             style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
         )
         Row {
-            Column(Modifier.height(200.dp).width(44.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.height(height).width(44.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 hourLabels.forEach {
                     Text(Fmt.minuteOfDay((it + 18 * 60) % 1440), style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -144,33 +166,34 @@ fun ScheduleChart(nights: List<ScheduleNight>, modifier: Modifier = Modifier, de
             Canvas(
                 Modifier
                     .weight(1f)
-                    .height(200.dp)
+                    .height(height)
+                    .clipToBounds()
                     .semantics { contentDescription = description }
-                    .pointerInput(nights) {
-                        detectTapGestures { p -> selected = (p.x / size.width * nights.size).toInt().coerceIn(0, nights.size - 1) }
+                    .chartZoomGestures(zoom)
+                    .pointerInput(nights, zoom) {
+                        detectTapGestures(
+                            onTap = { p -> selected = window(zoom, nights.size).indexAt(p.x, size.width.toFloat(), nights.size) },
+                            onDoubleTap = { p -> zoom?.toggle(p.x / size.width) },
+                        )
                     },
             ) {
                 val range = (hi - lo).toFloat()
                 fun y(m: Int) = (m - lo) / range * size.height
                 hourLabels.forEach { drawLine(grid, Offset(0f, y(it)), Offset(size.width, y(it)), 1f) }
-                val slot = size.width / nights.size
-                val w = (slot * 0.55f).coerceIn(2f, 28f)
-                nights.forEachIndexed { i, n ->
-                    val x = i * slot + (slot - w) / 2
+                val win = window(zoom, nights.size)
+                val slot = win.slot(size.width)
+                val w = (slot * 0.6f).coerceIn(1.5f, 28f)
+                for (i in win.visibleIndices(nights.size)) {
+                    val n = nights[i]
+                    val x = win.x(i, size.width) + (slot - w) / 2
                     val c = if (selected == null || selected == i) bar else bar.copy(alpha = 0.4f)
-                    drawRoundRect(c.copy(alpha = c.alpha * 0.45f), Offset(x, y(n.bedMinute)), Size(w, (y(n.asleepMinute) - y(n.bedMinute)).coerceAtLeast(1f)), CornerRadius(w / 3, w / 3))
-                    drawRoundRect(c, Offset(x, y(n.asleepMinute)), Size(w, (y(n.wakeMinute) - y(n.asleepMinute)).coerceAtLeast(2f)), CornerRadius(w / 3, w / 3))
-                    drawCircle(asleep, radius = (w / 3).coerceIn(2f, 6f), center = Offset(x + w / 2, y(n.asleepMinute)))
+                    drawRect(c.copy(alpha = c.alpha * 0.35f), Offset(x, y(n.bedMinute)), Size(w, (y(n.asleepMinute) - y(n.bedMinute)).coerceAtLeast(1f)))
+                    drawRect(c, Offset(x, y(n.asleepMinute)), Size(w, (y(n.wakeMinute) - y(n.asleepMinute)).coerceAtLeast(2f)))
+                    drawRect(asleep, Offset(x, y(n.asleepMinute) - 1.5f), Size(w, 3f))
                 }
             }
         }
-        if (nights.size <= 14) {
-            Row(Modifier.fillMaxWidth().padding(start = 44.dp)) {
-                nights.forEach {
-                    Text(it.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, textAlign = TextAlign.Center, maxLines = 1)
-                }
-            }
-        }
+        IndexLabels(nights.map { it.label }, window(zoom, nights.size), Modifier.padding(start = 44.dp))
     }
 }
 
@@ -186,6 +209,8 @@ fun PairedBarChart(
     firstColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
     secondColor: Color = MaterialTheme.colorScheme.primary,
     description: String,
+    zoom: ChartZoomState? = null,
+    height: Dp = 140.dp,
 ) {
     var selected by remember(entries) { mutableStateOf<Int?>(null) }
     val max = (entries.maxOfOrNull { maxOf(it.first, it.second) } ?: 1f).coerceAtLeast(1f) * 1.1f
@@ -199,36 +224,39 @@ fun PairedBarChart(
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(height)
+                .clipToBounds()
                 .semantics { contentDescription = description }
-                .pointerInput(entries) {
-                    detectTapGestures { p -> if (entries.isNotEmpty()) selected = (p.x / size.width * entries.size).toInt().coerceIn(0, entries.size - 1) }
+                .chartZoomGestures(zoom)
+                .pointerInput(entries, zoom) {
+                    detectTapGestures(
+                        onTap = { p -> if (entries.isNotEmpty()) selected = window(zoom, entries.size).indexAt(p.x, size.width.toFloat(), entries.size) },
+                        onDoubleTap = { p -> zoom?.toggle(p.x / size.width) },
+                    )
                 },
         ) {
             if (entries.isEmpty()) return@Canvas
-            val slot = size.width / entries.size
-            val w = (slot * 0.36f).coerceAtLeast(1.5f)
-            entries.forEachIndexed { i, e ->
+            val win = window(zoom, entries.size)
+            val slot = win.slot(size.width)
+            val w = (slot * 0.38f).coerceAtLeast(1f)
+            for (i in win.visibleIndices(entries.size)) {
+                val e = entries[i]
                 val a = if (selected == null || selected == i) 1f else 0.4f
-                val x = i * slot + slot * 0.12f
+                val x = win.x(i, size.width) + slot * 0.12f
                 val h1 = e.first / max * size.height
                 val h2 = e.second / max * size.height
-                drawRoundRect(firstColor.copy(alpha = firstColor.alpha * a), Offset(x, size.height - h1), Size(w, h1), CornerRadius(w / 4, w / 4))
-                drawRoundRect(secondColor.copy(alpha = secondColor.alpha * a), Offset(x + w, size.height - h2), Size(w, h2), CornerRadius(w / 4, w / 4))
+                drawRect(firstColor.copy(alpha = firstColor.alpha * a), Offset(x, size.height - h1), Size(w, h1))
+                drawRect(secondColor.copy(alpha = secondColor.alpha * a), Offset(x + w, size.height - h2), Size(w, h2))
             }
         }
-        if (entries.size <= 14) {
-            Row(Modifier.fillMaxWidth()) {
-                entries.forEach { Text(it.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, textAlign = TextAlign.Center, maxLines = 1) }
-            }
-        }
+        IndexLabels(entries.map { it.label }, window(zoom, entries.size))
     }
 }
 
 @Composable
 private fun Legend(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Box(Modifier.size(8.dp).background(color))
         Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall)
     }

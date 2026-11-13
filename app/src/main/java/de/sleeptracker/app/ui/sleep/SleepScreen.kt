@@ -20,6 +20,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.BatteryStd
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import de.sleeptracker.app.ui.components.NoticeBanner
+import de.sleeptracker.app.ui.components.ScreenHeader
+import de.sleeptracker.app.ui.components.SectionLabel
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -122,197 +133,212 @@ fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onO
 
     LaunchedEffect(state.tracking) { if (state.tracking) onTrackingStarted() }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(Fmt.fullDate(LocalDate.now()), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SnackbarHost(snackbar)
+    val startTracking: () -> Unit = {
+        val needed = buildList {
+            if (state.user.soundTrackingEnabled && !SystemChecks.mic(context)) add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33 && !SystemChecks.notifications(context)) add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (needed.isEmpty()) doStart() else permissionLauncher.launch(needed.toTypedArray())
+    }
 
-        state.interrupted.forEach { s ->
-            SectionCard(stringResource(R.string.interrupted_title)) {
-                Text(stringResource(R.string.interrupted_text, Fmt.time(s.startTimestamp), Fmt.date(s.sessionDate)))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { vm.resume(s.id); onTrackingStarted() }) { Text(stringResource(R.string.interrupted_resume)) }
-                    TextButton(onClick = { vm.finish(s.id) }) { Text(stringResource(R.string.interrupted_finish)) }
-                    TextButton(onClick = { vm.discard(s.id) }) { Text(stringResource(R.string.interrupted_discard)) }
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScreenHeader(stringResource(R.string.tonight), subtitle = Fmt.fullDate(LocalDate.now()))
+            SnackbarHost(snackbar)
+
+            state.interrupted.forEach { s ->
+                SectionCard(stringResource(R.string.interrupted_title)) {
+                    Text(stringResource(R.string.interrupted_text, Fmt.time(s.startTimestamp), Fmt.date(s.sessionDate)), style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { vm.resume(s.id); onTrackingStarted() }) { Text(stringResource(R.string.interrupted_resume)) }
+                        TextButton(onClick = { vm.finish(s.id) }) { Text(stringResource(R.string.interrupted_finish)) }
+                        TextButton(onClick = { vm.discard(s.id) }) { Text(stringResource(R.string.interrupted_discard)) }
+                    }
                 }
             }
-        }
 
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             val modes = listOf(TrackingMode.SMART_ALARM, TrackingMode.REGULAR_ALARM, TrackingMode.TRACKING_ONLY)
-            modes.forEachIndexed { i, m ->
-                SegmentedButton(
-                    selected = mode == m,
-                    onClick = { vm.setMode(m) },
-                    shape = SegmentedButtonDefaults.itemShape(i, modes.size),
-                ) { Text(modeLabel(m), maxLines = 1) }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                modes.forEachIndexed { i, m ->
+                    SegmentedButton(
+                        selected = mode == m,
+                        onClick = { vm.setMode(m) },
+                        shape = SegmentedButtonDefaults.itemShape(i, modes.size, baseShape = MaterialTheme.shapes.small),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primary,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                        icon = {},
+                    ) { Text(modeLabel(m), maxLines = 1) }
+                }
             }
-        }
 
-        if (mode.hasAlarm) {
-            SectionCard(null) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        stringResource(if (mode == TrackingMode.SMART_ALARM) R.string.wake_up_latest else R.string.alarm_at),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    Text(
-                        Fmt.minuteOfDay(alarm.targetWakeTime),
-                        Modifier.clickable { showTimePicker = true }.padding(8.dp),
-                        fontSize = 64.sp,
-                        fontWeight = FontWeight.Light,
-                    )
-                    if (mode == TrackingMode.SMART_ALARM) {
-                        val start = (alarm.targetWakeTime - alarm.wakeupWindowMinutes + 1440) % 1440
+            if (mode.hasAlarm) {
+                // Hero: the wake-up time.
+                SectionCard(stringResource(if (mode == TrackingMode.SMART_ALARM) R.string.wake_up_latest else R.string.alarm_at)) {
+                    Row(Modifier.fillMaxWidth().clickable { showTimePicker = true }, verticalAlignment = Alignment.Bottom) {
                         Text(
-                            stringResource(R.string.wake_window_range, Fmt.minuteOfDay(start), Fmt.minuteOfDay(alarm.targetWakeTime)),
-                            style = MaterialTheme.typography.bodyMedium,
+                            Fmt.minuteOfDay(alarm.targetWakeTime),
+                            style = MaterialTheme.typography.displayLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Filled.Edit, stringResource(R.string.edit_time), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 12.dp))
                     }
                     val untilMinutes = remember(alarm.targetWakeTime, refresh) {
                         val now = java.time.LocalTime.now()
                         val nowMin = now.hour * 60 + now.minute
                         ((alarm.targetWakeTime - nowMin + 1440) % 1440).let { if (it == 0) 1440 else it }
                     }
-                    Text(stringResource(R.string.alarm_in, durationText(untilMinutes)), style = MaterialTheme.typography.bodySmall)
+                    if (mode == TrackingMode.SMART_ALARM && alarm.wakeupWindowMinutes > 0) {
+                        val start = (alarm.targetWakeTime - alarm.wakeupWindowMinutes + 1440) % 1440
+                        Text(
+                            stringResource(R.string.wake_window_range, Fmt.minuteOfDay(start), Fmt.minuteOfDay(alarm.targetWakeTime)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Text(stringResource(R.string.alarm_in, durationText(untilMinutes)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (mode == TrackingMode.SMART_ALARM) {
+                        Spacer(Modifier.height(12.dp))
+                        SectionLabel(stringResource(R.string.wake_window))
+                        Spacer(Modifier.height(4.dp))
+                        ChoiceChips(
+                            options = listOf(0) + WAKE_WINDOWS,
+                            selected = alarm.wakeupWindowMinutes,
+                            label = { if (it == 0) stringResource(R.string.no_smart_wake) else stringResource(R.string.minutes_short, it) },
+                            onSelect = vm::setWindow,
+                        )
+                    }
                 }
-                if (mode == TrackingMode.SMART_ALARM) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(stringResource(R.string.wake_window), style = MaterialTheme.typography.labelLarge)
-                    ChoiceChips(
-                        options = listOf(0) + WAKE_WINDOWS,
-                        selected = alarm.wakeupWindowMinutes,
-                        label = { if (it == 0) stringResource(R.string.no_smart_wake) else stringResource(R.string.minutes_short, it) },
-                        onSelect = vm::setWindow,
+                SectionCard(stringResource(R.string.settings_alarm)) {
+                    SettingRow(stringResource(R.string.alarm_sound), value = ringtoneTitle(alarm.alarmSound), icon = Icons.Filled.MusicNote) {
+                        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                            .putExtra(
+                                RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                alarm.alarmSound.takeIf { it.isNotBlank() }?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                            )
+                        ringtoneLauncher.launch(intent)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingRow(
+                        stringResource(R.string.snooze),
+                        value = when (alarm.snoozeMode) {
+                            SnoozeMode.OFF -> stringResource(R.string.off)
+                            SnoozeMode.FIXED -> stringResource(R.string.snooze_fixed_summary, alarm.snoozeDurationMinutes, alarm.maximumSnoozes)
+                            SnoozeMode.INTELLIGENT -> stringResource(R.string.snooze_intelligent)
+                        },
+                        icon = Icons.Filled.Snooze,
+                        onClick = onOpenSettings,
                     )
                 }
-                SettingRow(
-                    stringResource(R.string.alarm_sound),
-                    value = ringtoneTitle(alarm.alarmSound),
-                    icon = Icons.Filled.MusicNote,
-                ) {
-                    val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
-                        .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                        .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                        .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                        .putExtra(
-                            RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
-                            alarm.alarmSound.takeIf { it.isNotBlank() }?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-                        )
-                    ringtoneLauncher.launch(intent)
+            } else {
+                SectionCard(stringResource(R.string.mode_no_alarm)) {
+                    Text(stringResource(R.string.tracking_only_hint), style = MaterialTheme.typography.bodyMedium)
                 }
-                SettingRow(
-                    stringResource(R.string.snooze),
-                    value = when (alarm.snoozeMode) {
-                        SnoozeMode.OFF -> stringResource(R.string.off)
-                        SnoozeMode.FIXED -> stringResource(R.string.snooze_fixed_summary, alarm.snoozeDurationMinutes, alarm.maximumSnoozes)
-                        SnoozeMode.INTELLIGENT -> stringResource(R.string.snooze_intelligent)
+            }
+
+            SectionCard(stringResource(R.string.sensors)) {
+                val user = state.user
+                val sel = when {
+                    user.soundTrackingEnabled && user.motionTrackingEnabled -> 2
+                    user.soundTrackingEnabled -> 0
+                    else -> 1
+                }
+                ChoiceChips(
+                    options = listOf(0, 1, 2),
+                    selected = sel,
+                    label = {
+                        stringResource(
+                            when (it) { 0 -> R.string.sensor_sound; 1 -> R.string.sensor_motion; else -> R.string.sensor_both },
+                        )
                     },
-                    icon = Icons.Filled.Snooze,
-                    onClick = onOpenSettings,
+                    onSelect = { vm.setSensors(sound = it != 1, motion = it != 0) },
                 )
+                if (user.soundTrackingEnabled) {
+                    Text(stringResource(R.string.mic_privacy_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                Row(Modifier.fillMaxWidth().clickable { showTips = !showTips }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.placement_title), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Icon(if (showTips) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (showTips) Text(stringResource(R.string.placement_text), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        } else {
-            SectionCard(null) {
-                Text(stringResource(R.string.tracking_only_hint), style = MaterialTheme.typography.bodyMedium)
+
+            // Readiness warnings, collapsed into one banner.
+            val warnings = buildList {
+                if (battery.percent in 0..19 && !battery.charging) add(stringResource(R.string.warn_battery_low, battery.percent))
+                else if (!battery.charging) add(stringResource(R.string.warn_not_charging))
+                if (mode.hasAlarm && !SystemChecks.exactAlarms(context)) add(stringResource(R.string.warn_exact_alarm))
+                if (mode.hasAlarm && !SystemChecks.fullScreen(context)) add(stringResource(R.string.warn_full_screen))
+                if (!SystemChecks.batteryOptimizationIgnored(context)) add(stringResource(R.string.warn_battery_optimization))
+            }
+            NoticeBanner(warnings) {
+                if (mode.hasAlarm && !SystemChecks.exactAlarms(context)) {
+                    TextButton(onClick = { SystemChecks.open(context, SystemChecks.exactAlarmSettings(context)) }) { Text(stringResource(R.string.fix_exact_alarm)) }
+                }
+                if (!SystemChecks.batteryOptimizationIgnored(context)) {
+                    TextButton(onClick = { SystemChecks.open(context, SystemChecks.batterySettings()) }) { Text(stringResource(R.string.fix_battery)) }
+                }
+            }
+
+            state.lastSession?.let { s ->
+                SectionCard(stringResource(R.string.last_night)) {
+                    Row(Modifier.fillMaxWidth().clickable { onOpenReport(s.id) }, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(durationText(s.estimatedSleepMinutes), style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "${Fmt.date(s.sessionDate)} · ${Fmt.time(s.startTimestamp)} – ${s.endTimestamp?.let { Fmt.time(it) } ?: "?"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text("${s.sleepQualityScore}", style = MaterialTheme.typography.displaySmall, color = DataColors.score(s.sleepQualityScore))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
 
-        SectionCard(stringResource(R.string.sensors)) {
-            val user = state.user
-            val sel = when {
-                user.soundTrackingEnabled && user.motionTrackingEnabled -> 2
-                user.soundTrackingEnabled -> 0
-                else -> 1
-            }
-            ChoiceChips(
-                options = listOf(0, 1, 2),
-                selected = sel,
-                label = {
-                    stringResource(
-                        when (it) { 0 -> R.string.sensor_sound; 1 -> R.string.sensor_motion; else -> R.string.sensor_both },
+        // Fixed primary action bar.
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { refresh++ }.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (battery.charging) Icons.Filled.BatteryChargingFull else Icons.Filled.BatteryStd, null,
+                        tint = if (battery.charging) DataColors.good else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
                     )
-                },
-                onSelect = { vm.setSensors(sound = it != 1, motion = it != 0) },
-            )
-            if (user.soundTrackingEnabled) {
-                Text(stringResource(R.string.mic_privacy_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        // Readiness warnings
-        val warnings = buildList {
-            if (battery.percent in 0..19 && !battery.charging) add(stringResource(R.string.warn_battery_low, battery.percent))
-            else if (!battery.charging) add(stringResource(R.string.warn_not_charging))
-            if (mode.hasAlarm && !SystemChecks.exactAlarms(context)) add(stringResource(R.string.warn_exact_alarm))
-            if (mode.hasAlarm && !SystemChecks.fullScreen(context)) add(stringResource(R.string.warn_full_screen))
-            if (!SystemChecks.batteryOptimizationIgnored(context)) add(stringResource(R.string.warn_battery_optimization))
-        }
-        if (warnings.isNotEmpty()) {
-            SectionCard(null) {
-                warnings.forEach {
-                    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                        Icon(
-                            if (it.contains("%")) Icons.Filled.BatteryAlert else Icons.Filled.Warning,
-                            contentDescription = null, tint = DataColors.warn,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall)
-                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        stringResource(R.string.battery_status, battery.percent, stringResource(if (battery.charging) R.string.charging else R.string.not_charging)),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(modeLabel(mode), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Row {
-                    if (mode.hasAlarm && !SystemChecks.exactAlarms(context)) {
-                        TextButton(onClick = { SystemChecks.open(context, SystemChecks.exactAlarmSettings(context)) }) { Text(stringResource(R.string.fix_exact_alarm)) }
-                    }
-                    if (!SystemChecks.batteryOptimizationIgnored(context)) {
-                        TextButton(onClick = { SystemChecks.open(context, SystemChecks.batterySettings()) }) { Text(stringResource(R.string.fix_battery)) }
-                    }
+                Button(
+                    onClick = startTracking,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Icon(Icons.Filled.Bedtime, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(R.string.start_tracking), style = MaterialTheme.typography.titleMedium)
                 }
             }
-        }
-
-        SectionCard(null) {
-            Row(Modifier.fillMaxWidth().clickable { showTips = !showTips }, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.placement_title), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Icon(if (showTips) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
-            }
-            if (showTips) {
-                Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.placement_text), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        state.lastSession?.let { s ->
-            SectionCard(stringResource(R.string.last_night)) {
-                Row(Modifier.fillMaxWidth().clickable { onOpenReport(s.id) }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(Fmt.date(s.sessionDate), style = MaterialTheme.typography.bodyMedium)
-                        Text(durationText(s.estimatedSleepMinutes), style = MaterialTheme.typography.titleLarge)
-                    }
-                    Text("${s.sleepQualityScore}", style = MaterialTheme.typography.displaySmall, color = DataColors.score(s.sleepQualityScore))
-                }
-            }
-        }
-
-        Button(
-            onClick = {
-                val needed = buildList {
-                    if (state.user.soundTrackingEnabled && !SystemChecks.mic(context)) add(Manifest.permission.RECORD_AUDIO)
-                    if (Build.VERSION.SDK_INT >= 33 && !SystemChecks.notifications(context)) add(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                if (needed.isEmpty()) doStart() else permissionLauncher.launch(needed.toTypedArray())
-            },
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-        ) {
-            Text(stringResource(R.string.start_tracking), style = MaterialTheme.typography.titleMedium)
-        }
-        OutlinedButton(onClick = { refresh++ }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text(stringResource(R.string.battery_status, battery.percent, stringResource(if (battery.charging) R.string.charging else R.string.not_charging)))
         }
     }
 

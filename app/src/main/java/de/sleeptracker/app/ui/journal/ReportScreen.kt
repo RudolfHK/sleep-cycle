@@ -61,6 +61,9 @@ import de.sleeptracker.app.data.db.SoundEventRecord
 import de.sleeptracker.app.data.repo.SessionDetails
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.components.ActivityChart
+import de.sleeptracker.app.ui.components.ChartPanel
+import de.sleeptracker.app.ui.components.rememberChartZoom
+import androidx.compose.foundation.layout.width
 import de.sleeptracker.app.ui.components.LineChart
 import de.sleeptracker.app.ui.components.TimeAxis
 import de.sleeptracker.app.data.db.UserSettings
@@ -176,12 +179,21 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                ScoreRing(s.sleepQualityScore, label = stringResource(R.string.sleep_score))
+            // Hero: score + the three figures people look at first.
+            SectionCard(null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    ScoreRing(s.sleepQualityScore, size = 112.dp, label = stringResource(R.string.sleep_score))
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        HeroFigure(stringResource(R.string.asleep), durationText(s.estimatedSleepMinutes))
+                        HeroFigure(stringResource(R.string.time_in_bed), durationText(s.timeInBedMinutes))
+                        HeroFigure(stringResource(R.string.efficiency), "%.0f %%".format(s.sleepEfficiency))
+                    }
+                }
                 if (!s.hasPhaseData) {
                     Text(
                         stringResource(R.string.imported_from_sleep_cycle),
-                        Modifier.padding(top = 8.dp),
+                        Modifier.padding(top = 10.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.secondary,
                     )
@@ -214,7 +226,8 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                 }
             }
 
-            SectionCard(stringResource(R.string.sleep_phases)) {
+            val hypnoZoom = rememberChartZoom(((end - start) / 60_000L).toInt().coerceAtLeast(1) / 5, s.id)
+            ChartPanel(stringResource(R.string.sleep_phases), if (d.stages.isEmpty()) null else hypnoZoom) { expanded ->
                 val runs = d.stages.map { StageRun(it.timestamp, it.durationSeconds * 1000L, it.stageType) }
                 if (runs.isEmpty()) {
                     Text(stringResource(if (s.hasPhaseData) R.string.no_data else R.string.imported_no_phases), style = MaterialTheme.typography.bodySmall)
@@ -228,7 +241,7 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                         )
                     }
                 } else {
-                    Hypnogram(runs, start, end, description = stringResource(R.string.cd_hypnogram))
+                    Hypnogram(runs, start, end, description = stringResource(R.string.cd_hypnogram), zoom = hypnoZoom, height = if (expanded) 300.dp else 150.dp)
                     Spacer(Modifier.height(12.dp))
                     PhaseBar(s.awakeMinutes, s.lightMinutes, s.deepMinutes, s.remMinutes) { stage, v -> "${stageName(stage)} ${durationText(v)}" }
                 }
@@ -236,7 +249,7 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
 
             SectionCard(stringResource(R.string.movement)) {
                 val activity = d.epochs.map { SleepStager.activityOf(it).let { a -> if (a.isNaN()) 0f else a } }
-                if (activity.isNotEmpty()) ActivityChart(activity, description = stringResource(R.string.cd_movement))
+                if (activity.isNotEmpty()) ActivityChart(activity, description = stringResource(R.string.cd_movement), zoom = hypnoZoom)
                 Text(stringResource(R.string.movements_per_hour, s.movementsPerHour), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.large_movements, d.movements.size), style = MaterialTheme.typography.bodySmall)
             }
@@ -313,6 +326,7 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
 /** Noise and light over the night, with the per-night figures. */
 @Composable
 private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
+    val zoom = rememberChartZoom(d.epochs.size.coerceAtLeast(1), d.session.id)
     val s = d.session
     SectionCard(stringResource(R.string.environment)) {
         Text(stringResource(R.string.noise_level), style = MaterialTheme.typography.titleSmall)
@@ -331,9 +345,11 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
                     d.epochs.map { if (it.hasSound && it.soundLevelDb > -100f) it.soundLevelDb + calibration else Float.NaN },
                     color = DataColors.sound(SoundEventType.NOISE_OTHER),
                     format = { "%.0f dB".format(it) },
+                    zoom = zoom,
                     description = stringResource(R.string.cd_noise_chart),
                 )
-                TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+                val span = ((s.endTimestamp ?: s.startTimestamp) - s.startTimestamp).toFloat()
+                TimeAxis(s.startTimestamp + (zoom.start * span).toLong(), s.startTimestamp + (zoom.end * span).toLong())
             }
             Text(stringResource(R.string.noise_uncalibrated), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -357,9 +373,11 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
                     color = DataColors.light,
                     format = ::luxText,
                     reference = EnvironmentSummary.DARK_LUX,
+                    zoom = zoom,
                     description = stringResource(R.string.cd_light_chart),
                 )
-                TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+                val span = ((s.endTimestamp ?: s.startTimestamp) - s.startTimestamp).toFloat()
+                TimeAxis(s.startTimestamp + (zoom.start * span).toLong(), s.startTimestamp + (zoom.end * span).toLong())
             }
             Text(stringResource(R.string.light_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -368,6 +386,14 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
 
 fun dbText(dbfs: Float, calibration: Int) = "%.0f dB".format(dbfs + calibration)
 fun luxText(lux: Float) = if (lux < 10f) "%.1f lx".format(lux) else "%.0f lx".format(lux)
+
+@Composable
+private fun HeroFigure(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium)
+    }
+}
 
 @Composable
 private fun ComparisonCard(s: SleepSession, avg: SleepSession) {

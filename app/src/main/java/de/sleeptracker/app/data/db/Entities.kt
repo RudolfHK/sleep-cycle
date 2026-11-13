@@ -23,7 +23,7 @@ data class UserSettings(
     @PrimaryKey val id: Int = 1,
     /** BCP-47 tag, empty = system default. */
     val language: String = "",
-    val theme: ThemeMode = ThemeMode.SYSTEM,
+    val theme: ThemeMode = ThemeMode.DARK,
     val sleepGoalMinutes: Int = 480,
     val defaultTrackingMode: TrackingMode = TrackingMode.SMART_ALARM,
     val soundTrackingEnabled: Boolean = true,
