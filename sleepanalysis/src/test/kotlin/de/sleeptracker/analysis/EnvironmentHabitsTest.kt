@@ -106,3 +106,16 @@ class EnvironmentHabitsTest {
         assertNull(StatisticsCalculator.compute((0..4).map { night(it, 23, 7, 450) }, 480).socialJetLagMinutes)
     }
 }
+
+class ImportedPhasesTest {
+    @Test
+    fun phaseAveragesIgnoreNightsWithoutPhases() {
+        fun rec(deep: Int, has: Boolean) = NightRecord(
+            0L, 8 * 3_600_000L, 0, 420, 480, 10, 87f, 70, 60, 230, deep, 100, 0, 0, 0, 0, 0, 0, hasPhases = has,
+        )
+        val st = StatisticsCalculator.compute(listOf(rec(90, true), rec(0, false)), 480)
+        assertEquals(90f, st.avgDeepMinutes, 1e-3f)
+        assertEquals(420f, st.avgSleepMinutes, 1e-3f)
+        assertEquals(2, st.nights)
+    }
+}

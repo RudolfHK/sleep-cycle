@@ -298,4 +298,21 @@
     <string name="light_sensor_missing">Dieses Gerät hat keinen Lichtsensor</string>
     <string name="noise_calibration">Kalibrierung Geräuschpegel</string>
     <string name="noise_calibration_hint">Versatz, der zum Mikrofonpegel addiert wird, um dB zu schätzen. Smartphones unterscheiden sich; zum Kalibrieren mit einem Schallpegelmesser vergleichen.</string>
+    <string name="import_sleep_cycle">Aus Sleep Cycle importieren</string>
+    <string name="import_hint">Importiere einen Sleep-Cycle-Export (.csv oder .xlsx, falls er in einer Tabellen-App geöffnet wurde). Bereits vorhandene Nächte werden übersprungen, erneutes Importieren ist also unbedenklich.</string>
+    <string name="import_reading">Wird gelesen …</string>
+    <string name="import_unknown_format">Diese Datei sieht nicht wie ein Sleep-Cycle-Export aus.</string>
+    <string name="import_rows">%1$d Zeilen in der Datei</string>
+    <string name="import_new">%1$d neue Nächte werden importiert</string>
+    <string name="import_range">Von %1$s bis %2$s</string>
+    <string name="import_duplicates">%1$d Nächte sind bereits vorhanden und werden übersprungen</string>
+    <string name="import_invalid">%1$d Zeilen konnten nicht gelesen werden und werden übersprungen</string>
+    <string name="import_limitations">Sleep-Cycle-Exporte enthalten nur Tageswerte: Importierte Nächte haben keinen Schlafphasen-Verlauf. Die Schlafqualität von Sleep Cycle wird als Bewertung übernommen.</string>
+    <string name="import_action">Importieren</string>
+    <string name="import_done">%1$d Nächte importiert</string>
+    <string name="imported_from_sleep_cycle">Aus Sleep Cycle importiert</string>
+    <string name="imported_no_phases">Keine Schlafphasen-Daten – diese Nacht wurde aus Sleep Cycle importiert.</string>
+    <string name="source_sleep_cycle">Sleep Cycle</string>
+    <string name="sleep_cycle_regularity">Regelmäßigkeit (Sleep Cycle)</string>
+    <string name="breathing_disruptions">Atemaussetzer</string>
 </resources>

@@ -27,4 +27,5 @@ class AppContainer(context: Context) {
     val alarmScheduler = AlarmScheduler(appContext, runtime)
     val tracking = TrackingController(appContext, this)
     val exporter = DataExporter(appContext, database, recordings, crypto)
+    val sleepCycleImport = de.sleeptracker.app.data.importer.SleepCycleImport(appContext, database, settings)
 }

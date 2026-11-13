@@ -34,6 +34,8 @@ data class NightRecord(
     val avgLux: Float? = null,
     /** Percent of the night that was dark, null when not measured. */
     val darkPercent: Float? = null,
+    /** False for imported nights without a hypnogram. */
+    val hasPhases: Boolean = true,
 ) {
     /** Time the user fell asleep (estimated). */
     val sleepOnsetMillis: Long get() = startMillis + latencyMinutes * 60_000L
@@ -112,6 +114,8 @@ object StatisticsCalculator {
     fun compute(nights: List<NightRecord>, goalMinutes: Int): PeriodStatistics {
         if (nights.isEmpty()) return PeriodStatistics.EMPTY
         val n = nights.size.toFloat()
+        val phased = nights.filter { it.hasPhases }
+        val pn = phased.size.coerceAtLeast(1).toFloat()
         val bed = nights.map { minuteOfDay(it.startMillis, it.zoneOffsetMinutes) }
         val wake = nights.map { minuteOfDay(it.endMillis, it.zoneOffsetMinutes) }
         val (bedMean, bedSd) = circularMeanAndSd(bed)
@@ -132,10 +136,11 @@ object StatisticsCalculator {
             bedtimeSdMinutes = bedSd,
             wakeSdMinutes = wakeSd,
             regularity = regularity,
-            avgAwakeMinutes = nights.sumOf { it.awakeMinutes } / n,
-            avgLightMinutes = nights.sumOf { it.lightMinutes } / n,
-            avgDeepMinutes = nights.sumOf { it.deepMinutes } / n,
-            avgRemMinutes = nights.sumOf { it.remMinutes } / n,
+            // Phases are averaged only over nights that have phase data (not imported ones).
+            avgAwakeMinutes = phased.sumOf { it.awakeMinutes } / pn,
+            avgLightMinutes = phased.sumOf { it.lightMinutes } / pn,
+            avgDeepMinutes = phased.sumOf { it.deepMinutes } / pn,
+            avgRemMinutes = phased.sumOf { it.remMinutes } / pn,
             avgSnoreEvents = nights.sumOf { it.snoreEvents } / n,
             totalSnoreMinutes = nights.sumOf { it.snoreSeconds } / 60f,
             avgCoughEvents = nights.sumOf { it.coughEvents } / n,

@@ -299,4 +299,21 @@
     <string name="light_sensor_missing">This device has no light sensor</string>
     <string name="noise_calibration">Noise level calibration</string>
     <string name="noise_calibration_hint">Offset added to the microphone level to estimate dB. Phones differ; compare with a sound level meter to calibrate.</string>
+    <string name="import_sleep_cycle">Import from Sleep Cycle</string>
+    <string name="import_hint">Import a Sleep Cycle export (.csv, or .xlsx if it was opened in a spreadsheet app). Nights already in the app are skipped, so importing again is safe.</string>
+    <string name="import_reading">Reading…</string>
+    <string name="import_unknown_format">This file does not look like a Sleep Cycle export.</string>
+    <string name="import_rows">%1$d rows in the file</string>
+    <string name="import_new">%1$d new nights will be imported</string>
+    <string name="import_range">From %1$s to %2$s</string>
+    <string name="import_duplicates">%1$d nights already exist and are skipped</string>
+    <string name="import_invalid">%1$d rows could not be read and are skipped</string>
+    <string name="import_limitations">Sleep Cycle exports contain nightly totals only: imported nights have no sleep-phase graph. Sleep Cycle\'s sleep quality is used as the score.</string>
+    <string name="import_action">Import</string>
+    <string name="import_done">Imported %1$d nights</string>
+    <string name="imported_from_sleep_cycle">Imported from Sleep Cycle</string>
+    <string name="imported_no_phases">No sleep-phase data – this night was imported from Sleep Cycle.</string>
+    <string name="source_sleep_cycle">Sleep Cycle</string>
+    <string name="sleep_cycle_regularity">Regularity (Sleep Cycle)</string>
+    <string name="breathing_disruptions">Breathing disruptions</string>
 </resources>

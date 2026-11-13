@@ -94,7 +94,8 @@ private fun JournalEntry(s: SleepSession, onClick: () -> Unit) {
                 Text(Fmt.date(s.sessionDate), style = MaterialTheme.typography.titleSmall)
                 Text(durationText(s.estimatedSleepMinutes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${Fmt.time(s.startTimestamp)} – ${s.endTimestamp?.let { Fmt.time(it) } ?: "?"}",
+                    "${Fmt.time(s.startTimestamp)} – ${s.endTimestamp?.let { Fmt.time(it) } ?: "?"}" +
+                        if (s.hasPhaseData) "" else " · " + stringResource(R.string.source_sleep_cycle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -201,3 +201,55 @@ Refined prompt:
 >
 > **5. Tests.** Unit tests for light carry-forward, noise peak aggregation,
 > environment summary, weekday/weekend split and social jet lag.
+
+---
+
+# Iteration 3 — import Sleep Cycle exports
+
+Original request: *"In Sleep Cycle it is possible to export the database as
+CSV — please make it possible to import such data into the new app."* (sample:
+an export opened/saved in Excel as `.xlsx`).
+
+Refined prompt:
+
+> Add a local, offline importer for Sleep Cycle exports (Settings → Data →
+> *Import from Sleep Cycle*), picked through the Storage Access Framework.
+>
+> **Accepted files.** `.csv` (UTF-8 with/without BOM; `;`, `,` or tab
+> delimiter, auto-detected; RFC 4180 quoting; decimal comma or point) and
+> `.xlsx` (a CSV re-saved by Excel/Google Sheets: shared strings, inline
+> strings, booleans, numeric Excel date serials, `_xHHHH_` escapes, the
+> mis-decoded BOM `ï»¿` and mojibake dashes). Parse in a pure-Kotlin module
+> (`:importer`) with unit tests; no new dependencies.
+>
+> **Formats.** Current export: `Went to bed, Woke up, Sleep Quality, Time in bed
+> (seconds), Time asleep (seconds), Asleep after (seconds), Regularity, Did snore,
+> Snore time (seconds), Coughing (per hour), Steps, City, Breathing disruptions
+> (per hour), Ambient noise (dB), Ambient light (lux), Alertness …, Movements per
+> hour, Wake up window start, Wake up window stop`. Legacy export: `Start, End,
+> Sleep quality (76%), Time in bed (h:mm), Wake up (:) :| :(), Sleep Notes
+> (colon-separated), Heart rate, Activity (steps)`. Match headers by normalised
+> name, ignore unknown columns, treat `—`/empty as missing.
+>
+> **Values.** Percent as `76%`, `0.76` or `76`. Dates as Excel serials or text
+> (`yyyy-MM-dd HH:mm[:ss]`, `yy-MM-dd …`, ISO, `dd.MM.yyyy …`, `MM/dd/yyyy …`);
+> wake-window dates are disambiguated by choosing the parse closest to the
+> wake-up time. Wall-clock times are interpreted in the phone's time zone.
+>
+> **Mapping.** Each row → a completed night with `source = sleep_cycle`: bed/wake
+> times, time in bed, time asleep (fallback: in bed − latency), latency,
+> efficiency, Sleep Cycle quality as score, snore time (snore count estimated as
+> snore seconds ÷ 4 – documented), coughs (per hour × hours asleep), movements
+> per hour, breathing disruptions, regularity, noise (stored as dBFS =
+> dB − current calibration so it displays as the original dB), light (all-zero
+> column ⇒ not measured), smart-alarm window → smart-alarm mode. Legacy notes →
+> journal tags (Coffee, Stressful day, Drank alcohol, Worked out, Ate late, …)
+> + free text; legacy mood → journal mood.
+>
+> **Rules.** Rows that are invalid (end ≤ start, > 24 h, unparsable dates) are
+> skipped and counted. Nights already in the app (start within ±5 min) are
+> skipped, so importing the same file twice is harmless. Show a preview (rows
+> found, new, duplicates, invalid, date range) before importing; insert in one
+> transaction. Imported nights have no hypnogram/epochs: the report says so and
+> statistics average sleep phases only over nights that have phase data. Room
+> migration v2 → v3 for the new columns.

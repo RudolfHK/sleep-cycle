@@ -29,6 +29,7 @@ the APK requests no network permission.
 :core           Domain models (epochs, stages, sound events, modes) – no Android
 :audio          FFT, feature extraction, adaptive noise floor, sound-event
                 detection & classification, WAV encoding – no Android
+:importer       Sleep Cycle CSV/XLSX reader and parser – no Android
 :sleepanalysis  Motion processing, epoch aggregation, sleep staging, session
                 summary, sleep score, smart-alarm decider, snooze logic,
                 statistics – no Android
@@ -144,6 +145,28 @@ and short, encrypted excerpts of detected events.
   choose the location), delete a night (optionally keeping its recordings),
   delete single/all recordings, automatic deletion after N days, delete all data.
 
+## Importing from Sleep Cycle
+
+Settings → Data → **Import from Sleep Cycle** reads a Sleep Cycle export
+(`.csv`, or `.xlsx` if the CSV was opened and saved in Excel/Google Sheets).
+Both the current export layout (`Went to bed; Woke up; Sleep Quality; Time in
+bed (seconds); …; Ambient noise (dB); Ambient light (lux); …; Wake up window
+stop`) and the legacy layout (`Start; End; Sleep quality; Time in bed; Wake up;
+Sleep Notes; …`) are recognised; delimiter, encoding, decimal commas, Excel
+date serials, and spreadsheet artefacts (garbled BOM, `_xHHHH_` escapes, `—`)
+are handled. A preview shows how many nights are new, already present (same
+bedtime ± 5 min – re-importing is harmless) or unreadable before anything is
+written.
+
+Imported nights get: bed/wake/fell-asleep times, time in bed, time asleep,
+efficiency, Sleep Cycle's quality as the score, snoring time (snore count
+estimated as seconds ÷ 4), coughs (per hour × hours asleep), movements per
+hour, breathing disruptions, Sleep Cycle regularity, average noise and light
+(an all-zero light column is treated as "not measured"), the smart-alarm
+window, and – from legacy files – mood and sleep notes mapped to journal tags.
+Sleep Cycle exports contain no hypnogram, so imported nights show no phase
+graph and statistics average sleep phases only over nights recorded here.
+
 ## Permissions
 
 | Permission | Why |
@@ -182,4 +205,5 @@ and short, encrypted excerpts of detected events.
 | Export, backup/restore, local deletion | `DataExporter`, `SettingsScreen` |
 | Noise & light levels per night, environment stats | `EpochAggregator`, `EnvironmentAnalyzer`, `ReportScreen.EnvironmentCard`, `StatisticsScreen.EnvironmentStatsCard` |
 | Bedtime / fell asleep / wake habits, time in bed vs. asleep, weekday vs. weekend | `StatisticsCalculator.schedule/socialJetLag`, `StatisticsScreen.HabitsCard`, `HabitCharts.kt` |
+| Import Sleep Cycle exports (CSV/XLSX) | `:importer` (`TableReader`, `SleepCycleParser`), `SleepCycleImport`, `SettingsScreen` |
 | No internet permission | `AndroidManifest.xml` (`tools:node="remove"`), CI permission check |

@@ -59,6 +59,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":audio"))
     implementation(project(":sleepanalysis"))
+    implementation(project(":importer"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

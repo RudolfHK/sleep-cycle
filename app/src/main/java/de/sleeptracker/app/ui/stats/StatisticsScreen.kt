@@ -270,8 +270,12 @@ fun StatisticsScreen() {
         }
 
         SectionCard(stringResource(R.string.phase_distribution)) {
-            PhaseBar(s.avgAwakeMinutes.toInt(), s.avgLightMinutes.toInt(), s.avgDeepMinutes.toInt(), s.avgRemMinutes.toInt()) { stage, v ->
-                "${stageName(stage)} ${durationText(v)}"
+            if (s.avgLightMinutes + s.avgDeepMinutes + s.avgRemMinutes <= 0f) {
+                Text(stringResource(R.string.imported_no_phases), style = MaterialTheme.typography.bodySmall)
+            } else {
+                PhaseBar(s.avgAwakeMinutes.toInt(), s.avgLightMinutes.toInt(), s.avgDeepMinutes.toInt(), s.avgRemMinutes.toInt()) { stage, v ->
+                    "${stageName(stage)} ${durationText(v)}"
+                }
             }
         }
 

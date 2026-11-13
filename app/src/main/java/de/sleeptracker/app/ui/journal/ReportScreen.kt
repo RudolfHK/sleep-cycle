@@ -178,6 +178,14 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
         ) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 ScoreRing(s.sleepQualityScore, label = stringResource(R.string.sleep_score))
+                if (!s.hasPhaseData) {
+                    Text(
+                        stringResource(R.string.imported_from_sleep_cycle),
+                        Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
                 EstimateNote(Modifier.padding(top = 8.dp))
             }
 
@@ -196,11 +204,30 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                     ),
                 )
                 s.alarmRangMillis?.let { Text(stringResource(R.string.alarm_rang_at, Fmt.time(it)), style = MaterialTheme.typography.bodySmall) }
+                if (s.externalRegularity >= 0 || s.breathingDisruptionsPerHour >= 0f) {
+                    StatGrid(
+                        listOfNotNull(
+                            s.externalRegularity.takeIf { it >= 0 }?.let { stringResource(R.string.sleep_cycle_regularity) to "$it %" },
+                            s.breathingDisruptionsPerHour.takeIf { it >= 0f }?.let { stringResource(R.string.breathing_disruptions) to "%.1f / h".format(it) },
+                        ),
+                    )
+                }
             }
 
             SectionCard(stringResource(R.string.sleep_phases)) {
                 val runs = d.stages.map { StageRun(it.timestamp, it.durationSeconds * 1000L, it.stageType) }
-                if (runs.isEmpty()) Text(stringResource(R.string.no_data)) else {
+                if (runs.isEmpty()) {
+                    Text(stringResource(if (s.hasPhaseData) R.string.no_data else R.string.imported_no_phases), style = MaterialTheme.typography.bodySmall)
+                    if (!s.hasPhaseData) {
+                        Spacer(Modifier.height(8.dp))
+                        StatGrid(
+                            listOf(
+                                stringResource(R.string.asleep) to durationText(s.estimatedSleepMinutes),
+                                stringResource(R.string.stage_awake) to durationText(s.awakeMinutes),
+                            ),
+                        )
+                    }
+                } else {
                     Hypnogram(runs, start, end, description = stringResource(R.string.cd_hypnogram))
                     Spacer(Modifier.height(12.dp))
                     PhaseBar(s.awakeMinutes, s.lightMinutes, s.deepMinutes, s.remMinutes) { stage, v -> "${stageName(stage)} ${durationText(v)}" }
@@ -209,7 +236,7 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
 
             SectionCard(stringResource(R.string.movement)) {
                 val activity = d.epochs.map { SleepStager.activityOf(it).let { a -> if (a.isNaN()) 0f else a } }
-                ActivityChart(activity, description = stringResource(R.string.cd_movement))
+                if (activity.isNotEmpty()) ActivityChart(activity, description = stringResource(R.string.cd_movement))
                 Text(stringResource(R.string.movements_per_hour, s.movementsPerHour), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.large_movements, d.movements.size), style = MaterialTheme.typography.bodySmall)
             }
@@ -293,19 +320,21 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
             Text(stringResource(R.string.noise_not_measured), style = MaterialTheme.typography.bodySmall)
         } else {
             StatGrid(
-                listOf(
+                listOfNotNull(
                     stringResource(R.string.average) to dbText(s.avgNoiseDb, calibration),
-                    stringResource(R.string.peak) to dbText(s.peakNoiseDb, calibration),
-                    stringResource(R.string.loud_time) to durationText(s.loudMinutes),
+                    if (s.hasPhaseData) stringResource(R.string.peak) to dbText(s.peakNoiseDb, calibration) else null,
+                    if (s.hasPhaseData) stringResource(R.string.loud_time) to durationText(s.loudMinutes) else null,
                 ),
             )
-            LineChart(
-                d.epochs.map { if (it.hasSound && it.soundLevelDb > -100f) it.soundLevelDb + calibration else Float.NaN },
-                color = DataColors.sound(SoundEventType.NOISE_OTHER),
-                format = { "%.0f dB".format(it) },
-                description = stringResource(R.string.cd_noise_chart),
-            )
-            TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            if (d.epochs.isNotEmpty()) {
+                LineChart(
+                    d.epochs.map { if (it.hasSound && it.soundLevelDb > -100f) it.soundLevelDb + calibration else Float.NaN },
+                    color = DataColors.sound(SoundEventType.NOISE_OTHER),
+                    format = { "%.0f dB".format(it) },
+                    description = stringResource(R.string.cd_noise_chart),
+                )
+                TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            }
             Text(stringResource(R.string.noise_uncalibrated), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(12.dp))
@@ -314,22 +343,24 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
             Text(stringResource(R.string.light_not_measured), style = MaterialTheme.typography.bodySmall)
         } else {
             StatGrid(
-                listOf(
+                listOfNotNull(
                     stringResource(R.string.average) to luxText(s.avgLux),
-                    stringResource(R.string.brightest) to luxText(s.maxLux),
-                    stringResource(R.string.dark_share) to "%.0f %%".format(s.darkPercent),
-                    stringResource(R.string.bright_time) to durationText(s.brightMinutes),
-                    stringResource(R.string.light_at_onset) to if (s.luxAtOnset >= 0) luxText(s.luxAtOnset) else "–",
+                    if (s.maxLux >= 0f) stringResource(R.string.brightest) to luxText(s.maxLux) else null,
+                    if (s.darkPercent >= 0f) stringResource(R.string.dark_share) to "%.0f %%".format(s.darkPercent) else null,
+                    if (s.hasPhaseData) stringResource(R.string.bright_time) to durationText(s.brightMinutes) else null,
+                    if (s.luxAtOnset >= 0) stringResource(R.string.light_at_onset) to luxText(s.luxAtOnset) else null,
                 ),
             )
-            LineChart(
-                d.epochs.map { if (it.hasLight && it.lightLux >= 0f) it.lightLux else Float.NaN },
-                color = DataColors.light,
-                format = ::luxText,
-                reference = EnvironmentSummary.DARK_LUX,
-                description = stringResource(R.string.cd_light_chart),
-            )
-            TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            if (d.epochs.isNotEmpty()) {
+                LineChart(
+                    d.epochs.map { if (it.hasLight && it.lightLux >= 0f) it.lightLux else Float.NaN },
+                    color = DataColors.light,
+                    format = ::luxText,
+                    reference = EnvironmentSummary.DARK_LUX,
+                    description = stringResource(R.string.cd_light_chart),
+                )
+                TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+            }
             Text(stringResource(R.string.light_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

@@ -15,7 +15,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "SleepTracker"
 
-include(":core", ":audio", ":sleepanalysis")
+include(":core", ":audio", ":sleepanalysis", ":importer")
 
 // The Android app module needs an Android SDK. Pure-Kotlin modules can be built and
 // tested on any JVM, so the app is skipped (with a warning) when no SDK is configured.

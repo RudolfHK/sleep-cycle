@@ -16,7 +16,7 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (analysis + audio DSP)
-        run: ./gradlew :sleepanalysis:test :audio:test --stacktrace
+        run: ./gradlew :sleepanalysis:test :audio:test :importer:test --stacktrace
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
       - name: Verify the APK requests no network permission

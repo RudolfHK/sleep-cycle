@@ -153,7 +153,7 @@ class SleepRepository(
     /** Fills environment figures for nights recorded before they existed (once, cheap). */
     suspend fun backfillEnvironment() {
         for (s in sessions.allCompleted()) {
-            if (s.hasNoiseData || s.hasLightData) continue
+            if (s.hasNoiseData || s.hasLightData || !s.hasPhaseData) continue
             val epochs = epochs(s.id)
             if (epochs.none { it.hasSound || it.hasLight }) continue
             val onset = s.startTimestamp + s.sleepLatencyMinutes * 60_000L
@@ -263,7 +263,8 @@ fun SleepSession.toNightRecord() = NightRecord(
     noiseEvents = noiseEvents,
     avgNoiseDb = avgNoiseDb.takeIf { hasNoiseData },
     avgLux = avgLux.takeIf { hasLightData },
-    darkPercent = darkPercent.takeIf { hasLightData },
+    darkPercent = darkPercent.takeIf { hasLightData && it >= 0f },
+    hasPhases = hasPhaseData,
 )
 
 fun Epoch.toRecord(sessionId: Long) = SleepEpochRecord(

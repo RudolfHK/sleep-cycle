@@ -121,7 +121,21 @@ data class SleepSession(
     val darkPercent: Float = 0f,
     val brightMinutes: Int = 0,
     val luxAtOnset: Float = -1f,
-)
+    // v3: imported nights.
+    /** [SOURCE_APP] for nights recorded here, [SOURCE_SLEEP_CYCLE] for imported ones. */
+    val source: String = SOURCE_APP,
+    val breathingDisruptionsPerHour: Float = -1f,
+    /** Regularity as reported by the source app (0..100), −1 if unknown. */
+    val externalRegularity: Int = -1,
+) {
+    /** Recorded by this app, so a hypnogram and 30-s epochs exist. */
+    val hasPhaseData: Boolean get() = source == SOURCE_APP
+
+    companion object {
+        const val SOURCE_APP = "app"
+        const val SOURCE_SLEEP_CYCLE = "sleep_cycle"
+    }
+}
 
 /** Compressed hypnogram: one row per run of identical stage. */
 @Serializable

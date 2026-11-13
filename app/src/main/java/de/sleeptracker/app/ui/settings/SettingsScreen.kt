@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
@@ -121,6 +122,19 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
         if (uri != null) runIo { c.exporter.createBackup(uri) }
     }
     var restoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var importPreview by remember { mutableStateOf<de.sleeptracker.app.data.importer.ImportPreview?>(null) }
+    var importBusy by remember { mutableStateOf(false) }
+    val msgImportUnknown = stringResource(R.string.import_unknown_format)
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            importBusy = true
+            val result = runCatching { c.sleepCycleImport.preview(uri) }
+            importBusy = false
+            result.onSuccess { p ->
+                if (p.format == de.sleeptracker.importer.ParseResult.Format.UNKNOWN) snackbar.showSnackbar(msgImportUnknown) else importPreview = p
+            }.onFailure { snackbar.showSnackbar(msgFailed) }
+        }
+    }
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { restoreUri = uri; confirm = "restore" }
     }
@@ -271,6 +285,20 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             SettingRow(stringResource(R.string.export_json), icon = Icons.Filled.FileDownload) { exportJson.launch("sleep-$today.json") }
             SettingRow(stringResource(R.string.create_backup), icon = Icons.Filled.Backup) { backup.launch("sleep-backup-$today.zip") }
             SettingRow(stringResource(R.string.restore_backup), icon = Icons.Filled.Restore) { restore.launch(arrayOf("application/zip", "application/octet-stream")) }
+            SettingRow(
+                stringResource(R.string.import_sleep_cycle),
+                value = if (importBusy) stringResource(R.string.import_reading) else null,
+                icon = Icons.Filled.FileUpload,
+            ) {
+                importLauncher.launch(
+                    arrayOf(
+                        "text/csv", "text/comma-separated-values", "text/plain", "text/*",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-excel", "application/octet-stream",
+                    ),
+                )
+            }
+            Text(stringResource(R.string.import_hint), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.backup_hint), style = MaterialTheme.typography.bodySmall)
             SettingRow(stringResource(R.string.delete_all_data), icon = Icons.Filled.DeleteForever) { confirm = "all" }
         }
@@ -279,6 +307,39 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             Text(stringResource(R.string.privacy_text), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.medical_disclaimer), style = MaterialTheme.typography.bodySmall)
         }
+    }
+
+    importPreview?.let { p ->
+        val msgImported = stringResource(R.string.import_done, p.newNights.size)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { importPreview = null },
+            title = { Text(stringResource(R.string.import_sleep_cycle)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(R.string.import_rows, p.rowsInFile))
+                    Text(stringResource(R.string.import_new, p.newNights.size), style = MaterialTheme.typography.titleMedium)
+                    if (p.firstDate != null && p.lastDate != null) {
+                        Text(stringResource(R.string.import_range, de.sleeptracker.app.ui.Fmt.date(p.firstDate), de.sleeptracker.app.ui.Fmt.date(p.lastDate)))
+                    }
+                    if (p.duplicates > 0) Text(stringResource(R.string.import_duplicates, p.duplicates))
+                    if (p.invalidRows > 0) Text(stringResource(R.string.import_invalid, p.invalidRows))
+                    Text(stringResource(R.string.import_limitations), style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = p.newNights.isNotEmpty(),
+                    onClick = {
+                        importPreview = null
+                        scope.launch {
+                            val ok = runCatching { c.sleepCycleImport.commit(p) }.isSuccess
+                            snackbar.showSnackbar(if (ok) msgImported else msgFailed)
+                        }
+                    },
+                ) { Text(stringResource(R.string.import_action)) }
+            },
+            dismissButton = { TextButton(onClick = { importPreview = null }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 
     when (confirm) {
