@@ -215,7 +215,10 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             SettingSlider(stringResource(R.string.motion_sensitivity), user.motionSensitivity, "%.0f %%".format(user.motionSensitivity * 100), 0f..1f) { v ->
                 vm.user { it.copy(motionSensitivity = v) }
             }
-            SettingSlider(stringResource(R.string.sound_sensitivity), user.soundSensitivity, "%.0f %%".format(user.soundSensitivity * 100), 0f..1f) { v ->
+            SettingSlider(
+                stringResource(R.string.sound_sensitivity), user.soundSensitivity,
+                "%.0f %% · %.1f dB".format(user.soundSensitivity * 100, 11f - 7f * user.soundSensitivity), 0f..1f,
+            ) { v ->
                 vm.user { it.copy(soundSensitivity = v) }
             }
             SettingSlider(stringResource(R.string.sleep_goal), user.sleepGoalMinutes.toFloat(), durationText(user.sleepGoalMinutes), 300f..660f, steps = 23) { v ->

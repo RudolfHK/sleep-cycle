@@ -35,6 +35,7 @@ import de.sleeptracker.app.data.db.MovementEventRecord
 import de.sleeptracker.app.data.db.SoundEventRecord
 import de.sleeptracker.app.data.db.UserSettings
 import de.sleeptracker.app.ui.MainActivity
+import de.sleeptracker.audio.SoundEpisodes
 import de.sleeptracker.audio.SoundEventDetector
 import de.sleeptracker.core.EPOCH_MILLIS
 import de.sleeptracker.core.Epoch
@@ -82,6 +83,7 @@ data class LiveTrackingStatus(
     val currentLux: Float = -1f,
     /** Mean level of the last epoch in dBFS, null when no audio. */
     val currentNoiseDb: Float? = null,
+    val lightReadings: Int = 0,
 )
 
 /**
@@ -117,6 +119,11 @@ class SleepTrackingService : Service(), SensorEventListener {
     @Volatile private var motionActive = false
     @Volatile private var lightActive = false
     @Volatile private var lastLux = -1f
+    private var lightSensor: Sensor? = null
+    private var lightRegisteredAt = 0L
+    private val lightReadings = java.util.concurrent.atomic.AtomicInteger(0)
+    private val lastExcerptAt = HashMap<SoundCategory, Long>()
+    private var audioEffects: List<android.media.audiofx.AudioEffect> = emptyList()
     private var wakeLock: PowerManager.WakeLock? = null
     private var tickerJob: Job? = null
     private var decider: SmartAlarmDecider? = null
@@ -231,12 +238,27 @@ class SleepTrackingService : Service(), SensorEventListener {
         motionActive = sm.registerListener(this, accel, 50_000, 2_000_000, sensorHandler())
     }
 
-    /** Ambient light (on-change sensor, cheap). Values are batched for up to 10 s. */
+    /**
+     * Ambient light. It is an on-change sensor, and many devices stop reporting it while the screen
+     * is off, so it is registered without batching and re-registered every few minutes (a fresh
+     * registration delivers the current value on most devices).
+     */
     private fun startLight() {
         val sm = getSystemService(SensorManager::class.java) ?: return
         val light = sm.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return
         sensorManager = sm
-        lightActive = sm.registerListener(this, light, SensorManager.SENSOR_DELAY_NORMAL, 10_000_000, sensorHandler())
+        lightSensor = light
+        lightActive = sm.registerListener(this, light, SensorManager.SENSOR_DELAY_NORMAL, sensorHandler())
+        lightRegisteredAt = System.currentTimeMillis()
+    }
+
+    private fun refreshLight(now: Long) {
+        val sm = sensorManager ?: return
+        val light = lightSensor ?: return
+        if (now - lightRegisteredAt < LIGHT_REFRESH_MILLIS) return
+        sm.unregisterListener(this, light)
+        lightActive = sm.registerListener(this, light, SensorManager.SENSOR_DELAY_NORMAL, sensorHandler())
+        lightRegisteredAt = now
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -245,6 +267,7 @@ class SleepTrackingService : Service(), SensorEventListener {
         if (event.sensor.type == Sensor.TYPE_LIGHT) {
             val lux = event.values[0]
             lastLux = lux
+            lightReadings.incrementAndGet()
             synchronized(lock) { aggregator?.onLight(ts, lux) }
             return
         }
@@ -277,7 +300,8 @@ class SleepTrackingService : Service(), SensorEventListener {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
         val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minBuffer <= 0) return
-        val record = listOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC).firstNotNullOfOrNull { src ->
+        // MIC has the higher, more natural gain on most phones; VOICE_RECOGNITION as fallback.
+        val record = listOf(MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION).firstNotNullOfOrNull { src ->
             try {
                 AudioRecord(src, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, FRAME * 2 * 8))
                     .takeIf { it.state == AudioRecord.STATE_INITIALIZED }
@@ -285,6 +309,24 @@ class SleepTrackingService : Service(), SensorEventListener {
                 null
             }
         } ?: return
+        // Keep levels stable over the night: no automatic gain, noise suppression or echo cancelling.
+        audioEffects = buildList<android.media.audiofx.AudioEffect> {
+            runCatching {
+                if (android.media.audiofx.AutomaticGainControl.isAvailable()) {
+                    android.media.audiofx.AutomaticGainControl.create(record.audioSessionId)?.let { it.enabled = false; add(it) }
+                }
+            }
+            runCatching {
+                if (android.media.audiofx.NoiseSuppressor.isAvailable()) {
+                    android.media.audiofx.NoiseSuppressor.create(record.audioSessionId)?.let { it.enabled = false; add(it) }
+                }
+            }
+            runCatching {
+                if (android.media.audiofx.AcousticEchoCanceler.isAvailable()) {
+                    android.media.audiofx.AcousticEchoCanceler.create(record.audioSessionId)?.let { it.enabled = false; add(it) }
+                }
+            }
+        }
         val detector = SoundEventDetector(SAMPLE_RATE, FRAME, user.soundSensitivity, captureExcerpts = user.audioRecordingEnabled)
         audioRunning = true
         micActive = true
@@ -318,6 +360,8 @@ class SleepTrackingService : Service(), SensorEventListener {
             scope.launch(Dispatchers.Main) { updateNotification() }
         } finally {
             runCatching { record.stop() }
+            audioEffects.forEach { runCatching { it.release() } }
+            audioEffects = emptyList()
             record.release()
         }
     }
@@ -333,7 +377,14 @@ class SleepTrackingService : Service(), SensorEventListener {
         val e = detected.event
         synchronized(lock) { aggregator?.onSoundEvent(e.startMillis, e.type == SoundEventType.SNORE, e.durationMillis) }
         if (!categoryEnabled(e.type)) return
+        // Faint or very short environmental noise is counted as activity only, not stored.
+        if (!SoundEpisodes.isReportable(e)) return
         soundEventCount++
+        // At most one audio excerpt per category every few minutes (one per snoring episode, etc.).
+        val keepAudio = synchronized(lastExcerptAt) {
+            val last = lastExcerptAt[e.type.category] ?: Long.MIN_VALUE
+            if (e.startMillis - last >= EXCERPT_INTERVAL_MILLIS) { lastExcerptAt[e.type.category] = e.startMillis; true } else false
+        }
         val sid = sessionId
         scope.launch {
             val c = applicationContext.container
@@ -349,7 +400,7 @@ class SleepTrackingService : Service(), SensorEventListener {
                     ),
                 )
                 val pcm = detected.pcm
-                if (user.audioRecordingEnabled && pcm != null) {
+                if (user.audioRecordingEnabled && pcm != null && keepAudio) {
                     val path = c.recordings.save(sid, id, e.type, e.startMillis, pcm, SAMPLE_RATE, user.automaticRecordingDeletionDays)
                     if (path != null) c.database.signalDao().setAudioPath(id, path)
                 }
@@ -380,6 +431,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             pendingEpochs += closed
             snapshot = if (decider != null) nightEpochs.toList() else emptyList()
         }
+        refreshLight(now)
         if (now - lastFlushMillis >= FLUSH_INTERVAL_MILLIS) flush()
         evaluateSmartAlarm(now, snapshot)
         if (closed.isNotEmpty()) withContext(Dispatchers.Main) { updateNotification() }
@@ -416,6 +468,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             dbMutex.withLock {
                 c.sleep.appendEpochs(sessionId, epochs)
                 c.sleep.appendMovements(moves)
+                if (lightSensor != null) c.database.sessionDao().setLightReadings(sessionId, lightReadings.get())
             }
             lastFlushMillis = System.currentTimeMillis()
         } catch (e: Exception) {
@@ -520,6 +573,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             problem = if (!micActive && !motionActive) getString(R.string.tracking_no_sensor) else null,
             lightActive = lightActive,
             currentLux = lastLux,
+            lightReadings = lightReadings.get(),
             currentNoiseDb = synchronized(lock) { nightEpochs.lastOrNull()?.takeIf { it.hasSound }?.soundLevelDb },
         )
         val text = buildString {
@@ -561,6 +615,8 @@ class SleepTrackingService : Service(), SensorEventListener {
         const val SAMPLE_RATE = 16_000
         const val FRAME = 1024
         private const val FLUSH_INTERVAL_MILLIS = 5 * 60_000L
+        private const val LIGHT_REFRESH_MILLIS = 3 * 60_000L
+        private const val EXCERPT_INTERVAL_MILLIS = 3 * 60_000L
         private const val MAX_TRACKING_MILLIS = 16 * 3_600_000L
 
         @Volatile

@@ -347,4 +347,11 @@
     <string name="chart_zoom_hint">Pinch, double-tap or + to zoom in</string>
     <string name="chart_zoom_hint_zoomed">Drag sideways to scroll · double-tap to show all</string>
     <string name="close">Close</string>
+    <string name="episode_detail">%1$d× · %2$s of sound · peak %3$s dB above background</string>
+    <string name="show_all_events">Show all %1$d single events</string>
+    <string name="hide_events">Hide single events (%1$d)</string>
+    <string name="light_no_readings">No readings: the light sensor exists but sent no values during the night. Some phones switch it off while the screen is off.</string>
+    <string name="live_light_readings">Light %1$s (%2$d readings)</string>
+    <string name="live_light_waiting">Light: waiting for sensor…</string>
+    <string name="reanalyze">Re-analyse night</string>
 </resources>

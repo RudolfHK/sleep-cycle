@@ -118,7 +118,12 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
                 androidx.compose.runtime.produceState(90) { value = c.settings.user().noiseCalibrationDb }.value
             }
             val env = buildList {
-                if (s.lightActive && s.currentLux >= 0f) add(stringResource(R.string.live_light, de.sleeptracker.app.ui.journal.luxText(s.currentLux)))
+                if (s.lightActive) {
+                    add(
+                        if (s.currentLux >= 0f) stringResource(R.string.live_light_readings, de.sleeptracker.app.ui.journal.luxText(s.currentLux), s.lightReadings)
+                        else stringResource(R.string.live_light_waiting),
+                    )
+                }
                 s.currentNoiseDb?.let { add(stringResource(R.string.live_noise, de.sleeptracker.app.ui.journal.dbText(it, calibration))) }
             }
             if (env.isNotEmpty()) {

@@ -46,6 +46,7 @@ class RuntimeStore(private val context: Context) {
     private val keyAlarmPlan = stringPreferencesKey("alarm_plan")
     private val keyOnboarding = booleanPreferencesKey("onboarding_done")
     private val keyEnvBackfill = booleanPreferencesKey("environment_backfill_v2")
+    private val keyAnalysisVersion = androidx.datastore.preferences.core.intPreferencesKey("analysis_version")
 
     val activeSessionId: Flow<Long?> = context.runtimeDataStore.data.map { it[keyActiveSession]?.takeIf { id -> id > 0 } }
     val alarmPlan: Flow<AlarmPlan?> = context.runtimeDataStore.data.map { p -> p[keyAlarmPlan]?.let(::decode) }
@@ -80,6 +81,12 @@ class RuntimeStore(private val context: Context) {
 
     suspend fun setEnvironmentBackfillDone() {
         context.runtimeDataStore.edit { it[keyEnvBackfill] = true }
+    }
+
+    suspend fun analysisVersion(): Int = context.runtimeDataStore.data.first()[keyAnalysisVersion] ?: 0
+
+    suspend fun setAnalysisVersion(v: Int) {
+        context.runtimeDataStore.edit { it[keyAnalysisVersion] = v }
     }
 
     suspend fun setOnboardingDone() {

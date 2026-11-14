@@ -127,6 +127,8 @@ data class SleepSession(
     val breathingDisruptionsPerHour: Float = -1f,
     /** Regularity as reported by the source app (0..100), −1 if unknown. */
     val externalRegularity: Int = -1,
+    /** v4: light-sensor readings received during the night; −1 = light not tracked. */
+    val lightReadings: Int = -1,
 ) {
     /** Recorded by this app, so a hypnogram and 30-s epochs exist. */
     val hasPhaseData: Boolean get() = source == SOURCE_APP

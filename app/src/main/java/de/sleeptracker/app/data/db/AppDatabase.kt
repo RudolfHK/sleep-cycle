@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SleepStatistics::class,
         RecordingMetadata::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,8 +36,15 @@ abstract class AppDatabase : RoomDatabase() {
             Room.databaseBuilder(context, AppDatabase::class.java, "sleep.db")
                 // WAL keeps writes during the night cheap and crash-safe.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
+
+        /** v4: number of light-sensor readings per night (diagnostics). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sleep_session ADD COLUMN lightReadings INTEGER NOT NULL DEFAULT -1")
+            }
+        }
 
         /** v3: imported nights (source app, breathing disruptions, external regularity). */
         val MIGRATION_2_3 = object : Migration(2, 3) {

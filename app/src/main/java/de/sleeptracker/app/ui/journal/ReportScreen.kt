@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -61,6 +62,12 @@ import de.sleeptracker.app.data.db.SoundEventRecord
 import de.sleeptracker.app.data.repo.SessionDetails
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.components.ActivityChart
+import de.sleeptracker.app.ui.components.EpisodeTimeline
+import de.sleeptracker.audio.SoundEpisodes
+import de.sleeptracker.core.SoundEvent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import de.sleeptracker.app.ui.components.ChartPanel
 import de.sleeptracker.app.ui.components.rememberChartZoom
 import androidx.compose.foundation.layout.width
@@ -103,6 +110,12 @@ class ReportViewModel(private val c: AppContainer, private val sessionId: Long) 
         _details.value = d
         _missing.value = d == null
         if (d != null) _previous.value = c.sleep.previousAverage(d.session.startTimestamp)
+    }
+
+    fun reanalyze() = viewModelScope.launch {
+        val s = c.sleep.session(sessionId) ?: return@launch
+        c.sleep.finalizeSession(sessionId, s.endTimestamp ?: s.startTimestamp)
+        reload()
     }
 
     fun saveJournal(note: String, mood: Int, tags: Set<String>) = viewModelScope.launch {
@@ -160,6 +173,9 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
                 },
                 actions = {
+                    if (details?.session?.hasPhaseData == true && details?.epochs?.isNotEmpty() == true) {
+                        IconButton(onClick = { vm.reanalyze() }) { Icon(Icons.Filled.Refresh, stringResource(R.string.reanalyze)) }
+                    }
                     if (details != null) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete_session)) }
                 },
             )
@@ -269,24 +285,50 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                     ActivityChart(d.epochs.map { it.snoreSeconds }, color = DataColors.sound(SoundEventType.SNORE), height = 50.dp, description = stringResource(R.string.snoring_graph))
                 }
                 if (d.soundEvents.isNotEmpty()) {
-                    SoundTimeline(d.soundEvents.map { it.timestamp to it.eventType }, start, end, description = stringResource(R.string.cd_sound_timeline))
+                    val episodes = remember(d.soundEvents) {
+                        SoundEpisodes.group(
+                            d.soundEvents.map { SoundEvent(it.timestamp, (it.durationSeconds * 1000).toLong(), it.eventType, it.confidence, it.intensityDb) },
+                        )
+                    }
+                    EpisodeTimeline(episodes, start, end, description = stringResource(R.string.cd_sound_timeline))
                     Spacer(Modifier.height(8.dp))
-                    d.soundEvents.forEach { e ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "${Fmt.time(e.timestamp)}  ${soundName(e.eventType)} · %.1f s · %.0f dB".format(e.durationSeconds, e.intensityDb),
-                                Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = DataColors.sound(e.eventType),
-                            )
-                            if (e.audioFilePath != null) {
-                                IconButton(onClick = { vm.togglePlay(e) }) {
-                                    Icon(if (playing == e.id) Icons.Filled.Stop else Icons.Filled.PlayArrow, stringResource(R.string.play))
+                    var showAll by remember { mutableStateOf(false) }
+                    episodes.forEach { ep ->
+                        val withAudio = ep.eventIndices.map { d.soundEvents[it] }.firstOrNull { it.audioFilePath != null }
+                        Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(width = 3.dp, height = 28.dp).background(DataColors.sound(ep.type)))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "${Fmt.time(ep.startMillis)}–${Fmt.time(ep.endMillis)}  ${soundName(ep.type)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    stringResource(R.string.episode_detail, ep.count, durationSecondsText(ep.soundMillis / 1000), "%.0f".format(ep.peakDb)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (withAudio != null) {
+                                IconButton(onClick = { vm.togglePlay(withAudio) }) {
+                                    Icon(if (playing == withAudio.id) Icons.Filled.Stop else Icons.Filled.PlayArrow, stringResource(R.string.play))
                                 }
-                                IconButton(onClick = { vm.deleteRecording(e) }) {
+                                IconButton(onClick = { vm.deleteRecording(withAudio) }) {
                                     Icon(Icons.Filled.DeleteOutline, stringResource(R.string.delete_recording))
                                 }
                             }
+                        }
+                    }
+                    TextButton(onClick = { showAll = !showAll }) {
+                        Text(stringResource(if (showAll) R.string.hide_events else R.string.show_all_events, d.soundEvents.size))
+                    }
+                    if (showAll) {
+                        d.soundEvents.forEach { e ->
+                            Text(
+                                "${Fmt.time(e.timestamp)}  ${soundName(e.eventType)} · %.1f s · %.0f dB".format(e.durationSeconds, e.intensityDb),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -356,7 +398,10 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
         Spacer(Modifier.height(12.dp))
         Text(stringResource(R.string.light_level), style = MaterialTheme.typography.titleSmall)
         if (!s.hasLightData) {
-            Text(stringResource(R.string.light_not_measured), style = MaterialTheme.typography.bodySmall)
+            Text(
+                stringResource(if (s.lightReadings == 0) R.string.light_no_readings else R.string.light_not_measured),
+                style = MaterialTheme.typography.bodySmall,
+            )
         } else {
             StatGrid(
                 listOfNotNull(
@@ -383,6 +428,10 @@ private fun EnvironmentCard(d: SessionDetails, calibration: Int) {
         }
     }
 }
+
+@Composable
+private fun durationSecondsText(seconds: Long): String =
+    if (seconds < 60) "$seconds s" else durationText((seconds / 60).toInt())
 
 fun dbText(dbfs: Float, calibration: Int) = "%.0f dB".format(dbfs + calibration)
 fun luxText(lux: Float) = if (lux < 10f) "%.1f lx".format(lux) else "%.0f lx".format(lux)

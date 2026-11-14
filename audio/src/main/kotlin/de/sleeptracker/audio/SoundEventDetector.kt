@@ -3,6 +3,7 @@ package de.sleeptracker.audio
 import de.sleeptracker.core.SoundEvent
 import de.sleeptracker.core.SoundEventType
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -46,11 +47,16 @@ class SoundEventDetector(
 
     private val extractor = FeatureExtractor(sampleRate, frameSize)
     private val floor = NoiseFloorTracker()
-    private val onDb = 14f - 8f * sensitivity.coerceIn(0f, 1f)
-    private val activeDb = 6f
-    private val absoluteMinDb = -80f + 0f
+    /** Start threshold above the noise floor: 11 dB (low sensitivity) … 4 dB (high); default 7.5 dB. */
+    val onDb = 11f - 7f * sensitivity.coerceIn(0f, 1f)
+    private val activeDb = minOf(5f, onDb - 1f)
+    /** Only rejects digital silence; quiet rooms are handled by the relative noise floor. */
+    private val absoluteMinDb = -110f
     private val frameSec = frameSize.toFloat() / sampleRate
-    private val hangFrames = 5
+    /** Gaps shorter than ~0.6 s stay inside the same event (syllables, rustling, snore tails). */
+    private val hangFrames = maxOf(1, (0.6f / frameSec).toInt())
+    /** Events shorter than ~0.25 s are clicks, not sounds worth reporting. */
+    private val minFrames = maxOf(2, (0.25f / frameSec).roundToInt())
     private val maxFrames = (30f / frameSec).toInt()
 
     // Current event state
@@ -115,7 +121,7 @@ class SoundEventDetector(
         val ef = frames.subList(0, keep).toList()
         val ex = excess.subList(0, keep).toList()
         frames.clear(); excess.clear()
-        if (ef.size < 2) return null
+        if (ef.size < minFrames) return null
         val features = summarise(ef, ex)
         val (type, baseConfidence) = classify(features)
         var confidence = baseConfidence

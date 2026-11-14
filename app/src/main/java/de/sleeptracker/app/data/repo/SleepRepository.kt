@@ -120,7 +120,7 @@ class SleepRepository(
         val previousBedtimes = previous.map { SleepScoreCalculator.minutesSinceEvening(it.startTimestamp, it.zoneOffsetMinutes) }
         val score = SleepScoreCalculator(user.scoreWeights())
             .score(summary, user.sleepGoalMinutes, previousBedtimes, session.zoneOffsetMinutes)
-        val events = signals.soundEvents(sessionId)
+        val events = signals.soundEvents(sessionId).filter { it.isReportable() }
         val env = EnvironmentAnalyzer.analyze(epochs, summary.sleepOnsetMillis)
         val updated = session.withEnvironment(env).copy(
             endTimestamp = end,
@@ -150,6 +150,21 @@ class SleepRepository(
         return updated
     }
 
+    /**
+     * Re-runs the analysis for nights recorded in this app (stored 30-s epochs are kept, so
+     * improved algorithms apply to past nights). Imported nights are left alone.
+     */
+    suspend fun reanalyzeAll(): Int {
+        var n = 0
+        for (s in sessions.allCompleted()) {
+            if (!s.hasPhaseData) continue
+            if (signals.epochs(s.id).isEmpty()) continue
+            finalizeSession(s.id, s.endTimestamp ?: s.startTimestamp)
+            n++
+        }
+        return n
+    }
+
     /** Fills environment figures for nights recorded before they existed (once, cheap). */
     suspend fun backfillEnvironment() {
         for (s in sessions.allCompleted()) {
@@ -167,7 +182,7 @@ class SleepRepository(
             session = s,
             epochs = epochs(sessionId),
             stages = signals.stages(sessionId),
-            soundEvents = signals.soundEvents(sessionId),
+            soundEvents = signals.soundEvents(sessionId).filter { it.isReportable() },
             movements = signals.movements(sessionId),
             journal = journals.get(sessionId),
         )
@@ -228,6 +243,11 @@ class SleepRepository(
         return out
     }
 }
+
+/** Same rule as during recording: faint/very short environmental noise is not shown or counted. */
+fun SoundEventRecord.isReportable(): Boolean = de.sleeptracker.audio.SoundEpisodes.isReportable(
+    de.sleeptracker.core.SoundEvent(timestamp, (durationSeconds * 1000).toLong(), eventType, confidence, intensityDb),
+)
 
 fun SleepSession.withEnvironment(env: EnvironmentSummary) = copy(
     hasNoiseData = env.hasNoise,

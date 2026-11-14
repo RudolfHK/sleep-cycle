@@ -224,6 +224,24 @@ fun SoundTimeline(events: List<Pair<Long, SoundEventType>>, startMillis: Long, e
     }
 }
 
+/** Sound episodes as coloured bars on the night's time line (one lane per category). */
+@Composable
+fun EpisodeTimeline(episodes: List<de.sleeptracker.audio.SoundEpisode>, startMillis: Long, endMillis: Long, modifier: Modifier = Modifier, description: String) {
+    val span = (endMillis - startMillis).coerceAtLeast(1L)
+    val line = MaterialTheme.colorScheme.outlineVariant
+    val lanes = de.sleeptracker.core.SoundCategory.entries
+    Canvas(modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = description }) {
+        val laneH = size.height / lanes.size
+        lanes.indices.forEach { drawLine(line, Offset(0f, laneH * (it + 0.5f)), Offset(size.width, laneH * (it + 0.5f)), 1f) }
+        for (e in episodes) {
+            val x0 = ((e.startMillis - startMillis).toFloat() / span * size.width).coerceIn(0f, size.width)
+            val x1 = ((e.endMillis - startMillis).toFloat() / span * size.width).coerceIn(0f, size.width)
+            val lane = lanes.indexOf(e.category)
+            drawRect(DataColors.sound(e.type), Offset(x0, lane * laneH + laneH * 0.15f), Size((x1 - x0).coerceAtLeast(3f), laneH * 0.7f))
+        }
+    }
+}
+
 data class BarEntry(val label: String, val value: Float, val display: String, val color: Color? = null)
 
 /**

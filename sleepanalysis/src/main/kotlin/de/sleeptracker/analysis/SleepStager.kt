@@ -29,6 +29,13 @@ class SleepStager(private val config: Config = Config()) {
         val strongWakeActivity: Float = 6f,
         val onsetEpochs: Int = 20,
         val cycleMinutes: Int = 90,
+        /** Minimum run lengths in epochs (30 s): deep 10 min, REM 5 min, light 3 min, awake 2 min. */
+        val minDeepEpochs: Int = 20,
+        val minRemEpochs: Int = 10,
+        val minLightEpochs: Int = 6,
+        val minAwakeEpochs: Int = 4,
+        /** Half-width (epochs) of the smoothing used for the deep/light/REM split (~12 min). */
+        val phaseSmoothHalf: Int = 12,
     )
 
     data class Result(
@@ -40,7 +47,9 @@ class SleepStager(private val config: Config = Config()) {
     fun stage(epochs: List<Epoch>): Result {
         val n = epochs.size
         if (n == 0) return Result(emptyList(), -1)
-        val activity = FloatArray(n) { activityOf(epochs[it]) }
+        // Constant background sound (breathing, fan) is not movement: remove the night's baseline.
+        val baseline = soundBaseline(epochs)
+        val activity = FloatArray(n) { activityOf(epochs[it], baseline) }
         val valid = BooleanArray(n) { !activity[it].isNaN() }
 
         // --- 2. wake / sleep -------------------------------------------------------------
@@ -50,6 +59,8 @@ class SleepStager(private val config: Config = Config()) {
         }
         fillGaps(awake, valid)
         rescore(awake)
+        // A brief "wake" inside sleep is kept only with a strong movement.
+        dropBriefWake(awake, activity)
 
         // --- 3. onset ---------------------------------------------------------------------
         var onset = -1
@@ -73,7 +84,7 @@ class SleepStager(private val config: Config = Config()) {
 
         // --- 4. deep / REM / light -------------------------------------------------------
         val stages = Array(n) { if (awake[it]) SleepStage.AWAKE else SleepStage.LIGHT }
-        val longSmooth = FloatArray(n) { movingAverage(activity, valid, it, 10) }
+        val longSmooth = FloatArray(n) { movingAverage(activity, valid, it, config.phaseSmoothHalf) }
         val sleepIdx = (0 until n).filter { !awake[it] }
         val rank = FloatArray(n)
         sleepIdx.sortedWith(compareBy({ longSmooth[it] }, { it })).forEachIndexed { r, idx ->
@@ -103,7 +114,8 @@ class SleepStager(private val config: Config = Config()) {
             }
             remCandidates.take(remTarget).forEach { stages[it] = SleepStage.REM }
         }
-        modeFilter(stages)
+        val lastSleep = stages.indexOfLast { it != SleepStage.AWAKE }
+        if (lastSleep > onset) enforceMinRuns(stages, onset, lastSleep)
 
         val staged = List(n) { i ->
             val base = if (!valid[i]) 0.2f else {
@@ -194,6 +206,55 @@ class SleepStager(private val config: Config = Config()) {
         return out
     }
 
+    private fun dropBriefWake(awake: BooleanArray, activity: FloatArray) {
+        val first = awake.indexOfFirst { !it }
+        val last = awake.indexOfLast { !it }
+        if (first < 0 || last <= first) return
+        var i = first
+        while (i <= last) {
+            if (!awake[i]) { i++; continue }
+            val s = i
+            while (i <= last && awake[i]) i++
+            val len = i - s
+            val peak = (s until i).maxOf { if (activity[it].isNaN()) 0f else activity[it] }
+            if (len < config.minAwakeEpochs && peak < config.strongWakeActivity * 1.5f) {
+                for (j in s until i) awake[j] = false
+            }
+        }
+    }
+
+    private fun minRun(stage: SleepStage) = when (stage) {
+        SleepStage.DEEP -> config.minDeepEpochs
+        SleepStage.REM -> config.minRemEpochs
+        SleepStage.LIGHT -> config.minLightEpochs
+        SleepStage.AWAKE -> config.minAwakeEpochs
+    }
+
+    /**
+     * Merges runs shorter than their stage's minimum into the longer neighbouring run, shortest
+     * first, between sleep onset and the last sleep epoch. Produces stable, readable phases.
+     */
+    private fun enforceMinRuns(stages: Array<SleepStage>, from: Int, to: Int) {
+        repeat(stages.size) {
+            data class Run(val stage: SleepStage, val start: Int, val len: Int)
+            val runs = ArrayList<Run>()
+            var s = from
+            for (i in from + 1..to + 1) {
+                if (i > to || stages[i] != stages[s]) { runs += Run(stages[s], s, i - s); s = i }
+            }
+            val idx = runs.indices.filter { runs[it].len < minRun(runs[it].stage) && runs.size > 1 }
+                .minByOrNull { runs[it].len } ?: return
+            val r = runs[idx]
+            val prev = runs.getOrNull(idx - 1)
+            val next = runs.getOrNull(idx + 1)
+            // Prefer a sleep neighbour over wake, then the longer one.
+            val target = listOfNotNull(prev, next).sortedWith(
+                compareBy<Run>({ if (r.stage != SleepStage.AWAKE && it.stage == SleepStage.AWAKE) 1 else 0 }, { -it.len }),
+            ).first().stage
+            for (j in r.start until r.start + r.len) stages[j] = target
+        }
+    }
+
     /** Removes stage flicker shorter than 1.5 minutes among sleep stages. */
     private fun modeFilter(stages: Array<SleepStage>) {
         val copy = stages.copyOf()
@@ -222,13 +283,23 @@ class SleepStager(private val config: Config = Config()) {
 
         /**
          * Activity value of an epoch, NaN when the epoch contains no signal.
-         * Motion counts are capped at 10 per epoch; sound activity of 40 % active frames maps to 10.
+         * Motion counts are capped at 10 per epoch; sound activity above the night's baseline maps 10 % → 1 (cap 8).
          */
-        fun activityOf(e: Epoch): Float {
+        /** 30th percentile of non-snore sound activity over the night (constant background). */
+        fun soundBaseline(epochs: List<Epoch>): Float {
+            val v = epochs.filter { it.hasSound }.map { nonSnoreSound(it) }.sorted()
+            return if (v.size < 20) 0f else v[(v.size * 0.3).toInt()]
+        }
+
+        private fun nonSnoreSound(e: Epoch) = (e.soundActivity - e.snoreSeconds / (EPOCH_MILLIS / 1000f)).coerceAtLeast(0f)
+
+        fun activityOf(e: Epoch, soundBaseline: Float = 0f): Float {
             val motion = if (e.hasMotion) min(e.motionCount.toFloat(), 10f) else Float.NaN
             val sound = if (e.hasSound) {
-                val nonSnore = (e.soundActivity - e.snoreSeconds / (EPOCH_MILLIS / 1000f)).coerceAtLeast(0f)
-                min(nonSnore * 25f, 10f)
+                val nonSnore = (nonSnoreSound(e) - soundBaseline).coerceAtLeast(0f)
+                // 10 % extra active frames ≈ one movement; a rustle while turning over is movement,
+                // not wake, so sound alone saturates below the "strong wake" level for long sounds only.
+                min(nonSnore * 10f, 8f)
             } else Float.NaN
             return when {
                 !motion.isNaN() && !sound.isNaN() -> min(motion + 0.5f * sound, 12f)

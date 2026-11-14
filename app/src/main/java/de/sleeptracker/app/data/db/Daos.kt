@@ -70,6 +70,10 @@ interface SessionDao {
     @Query("DELETE FROM sleep_session WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /** Keeps the highest count (the service restarts its counter after a process restart). */
+    @Query("UPDATE sleep_session SET lightReadings = MAX(lightReadings, :count) WHERE id = :id")
+    suspend fun setLightReadings(id: Long, count: Int)
+
     @Query("DELETE FROM sleep_session")
     suspend fun deleteAll()
 }

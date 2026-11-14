@@ -296,3 +296,50 @@ Refined prompt:
 > sleep per weekday; best and worst night (tap to open); plus the existing
 > habits, regularity, phases, sounds and environment sections. Calculations live
 > in `:sleepanalysis` and are unit tested.
+
+---
+
+# Iteration 5 — fixes from a real test night
+
+Original feedback: *"Light in the environment doesn't seem to be measured.
+Detection of sleep phases doesn't work properly with light and deep sleep. The
+sensitivity of the mic seems lower than in Sleep Cycle. The segments caught over
+the night are too many and too short — it's too sensitive."*
+
+Refined prompt (diagnosis → required change → how to verify):
+
+> **1. Light not measured.** Cause: the ambient light sensor is an on-change
+> sensor registered once with a 10 s batching latency; many devices stop
+> delivering it while the screen is off and only send a value on registration
+> or on change. Fix: register without batching, re-register every 3 minutes to
+> force a fresh reading, keep carrying the last value forward, count readings
+> per night and show them live on the night screen; if a sensor exists but
+> delivered nothing, the report says "no readings (device stops the sensor when
+> the screen is off)" instead of a generic "not measured".
+>
+> **2. Microphone sensitivity.** Causes: the `VOICE_RECOGNITION` source has low
+> gain on many phones, a hard −80 dBFS gate drops quiet sounds in quiet rooms,
+> and events must exceed the noise floor by 10 dB. Fix: prefer the `MIC` source
+> (fall back to `VOICE_RECOGNITION`) with AGC/noise suppression disabled when
+> available so levels stay comparable; remove the absolute gate (keep the
+> relative floor); default event threshold 7 dB above the floor (sensitivity
+> slider 4–11 dB).
+>
+> **3. Too many / too short segments.** Causes: every snore or noise burst is a
+> separate row; stage runs have no minimum length; constant breathing sound
+> counts as activity. Fix:
+> * Sound: bridge gaps < 0.6 s inside an event, ignore events < 0.25 s, drop
+>   environmental-noise events that are < 0.4 s or < 12 dB above the floor;
+>   group events of the same category into **episodes** (gap ≤ 60 s for
+>   snoring, ≤ 30 s otherwise) for the report list and timeline; save at most one
+>   audio excerpt per category every 3 minutes.
+> * Stages: remove the night's sound baseline (30th percentile) before scoring
+>   activity; brief wake (< 2 min) inside sleep only with a strong movement;
+>   enforce minimum run lengths (deep ≥ 10 min, REM ≥ 5 min, light ≥ 3 min,
+>   awake ≥ 2 min) by merging short runs into their longer neighbour; smooth
+>   over ~12 minutes for the deep/light/REM split.
+>
+> **4. Verify** with unit tests: a noisy synthetic night yields fewer than ~40
+> stage runs with no run below its minimum and deep sleep concentrated early;
+> episode grouping; event bridging and minimum duration; quiet events below the
+> old −80 dBFS gate are detected.

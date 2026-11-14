@@ -346,4 +346,11 @@
     <string name="chart_zoom_hint">Zum Vergrößern zwei Finger, Doppeltippen oder +</string>
     <string name="chart_zoom_hint_zoomed">Seitlich ziehen zum Verschieben · Doppeltippen zeigt alles</string>
     <string name="close">Schließen</string>
+    <string name="episode_detail">%1$d× · %2$s Geräusch · Spitze %3$s dB über Grundpegel</string>
+    <string name="show_all_events">Alle %1$d Einzelereignisse zeigen</string>
+    <string name="hide_events">Einzelereignisse ausblenden (%1$d)</string>
+    <string name="light_no_readings">Keine Messwerte: Der Lichtsensor ist vorhanden, hat aber nachts keine Werte geliefert. Manche Smartphones schalten ihn bei ausgeschaltetem Display ab.</string>
+    <string name="live_light_readings">Licht %1$s (%2$d Messungen)</string>
+    <string name="live_light_waiting">Licht: warte auf Sensor …</string>
+    <string name="reanalyze">Nacht neu auswerten</string>
 </resources>

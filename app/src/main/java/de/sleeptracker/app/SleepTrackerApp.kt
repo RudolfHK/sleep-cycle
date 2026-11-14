@@ -26,6 +26,12 @@ class SleepTrackerApp : Application() {
         )
         // Detect sessions interrupted by a crash or process kill.
         container.appScope.launch { container.tracking.recoverIfNeeded() }
+        // Improved analysis (stable phases, sound baseline): re-analyse stored nights once.
+        container.appScope.launch {
+            if (container.runtime.analysisVersion() < ANALYSIS_VERSION && container.runtime.activeSession() == null) {
+                runCatching { container.sleep.reanalyzeAll() }.onSuccess { container.runtime.setAnalysisVersion(ANALYSIS_VERSION) }
+            }
+        }
         container.appScope.launch {
             if (!container.runtime.environmentBackfillDone()) {
                 runCatching { container.sleep.backfillEnvironment() }.onSuccess { container.runtime.setEnvironmentBackfillDone() }
@@ -56,6 +62,8 @@ class SleepTrackerApp : Application() {
         const val CHANNEL_TRACKING = "tracking"
         const val CHANNEL_ALARM = "alarm"
         const val CHANNEL_INFO = "info"
+        /** Bump when the sleep analysis changes so stored nights are re-analysed once. */
+        const val ANALYSIS_VERSION = 5
     }
 }
 

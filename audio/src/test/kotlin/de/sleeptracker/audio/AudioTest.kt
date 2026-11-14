@@ -138,3 +138,68 @@ class AudioTest {
         assertTrue(run(concat(background(60.0))).isEmpty())
     }
 }
+
+class EpisodeAndSensitivityTest {
+    private fun ev(t: Long, type: SoundEventType, dur: Long = 1500, db: Float = 20f) =
+        de.sleeptracker.core.SoundEvent(t, dur, type, 0.8f, db)
+
+    @Test
+    fun groupsSnoresIntoEpisodes() {
+        val events = (0 until 30).map { ev(it * 4_000L, SoundEventType.SNORE) } +
+            (0 until 10).map { ev(3_600_000L + it * 5_000L, SoundEventType.SNORE) } +
+            listOf(ev(60_000L, SoundEventType.COUGH, 400), ev(70_000L, SoundEventType.COUGH, 400), ev(200_000L, SoundEventType.COUGH, 400))
+        val eps = SoundEpisodes.group(events)
+        val snore = eps.filter { it.category == de.sleeptracker.core.SoundCategory.SNORING }
+        assertEquals(2, snore.size)
+        assertEquals(30, snore[0].count)
+        assertEquals(45_000L, snore[0].soundMillis)
+        val cough = eps.filter { it.category == de.sleeptracker.core.SoundCategory.COUGHING }
+        assertEquals(listOf(2, 1), cough.map { it.count })
+        assertTrue(eps.zipWithNext().all { (a, b) -> a.startMillis <= b.startMillis })
+    }
+
+    @Test
+    fun faintShortNoiseIsNotReportable() {
+        assertTrue(!SoundEpisodes.isReportable(ev(0, SoundEventType.NOISE_OTHER, 300, 20f)))
+        assertTrue(!SoundEpisodes.isReportable(ev(0, SoundEventType.NOISE_HOUSEHOLD, 1500, 8f)))
+        assertTrue(SoundEpisodes.isReportable(ev(0, SoundEventType.NOISE_DOOR, 600, 25f)))
+        assertTrue(SoundEpisodes.isReportable(ev(0, SoundEventType.SNORE, 300, 5f)))
+    }
+
+    @Test
+    fun quietRoomEventsAreDetected() {
+        // Room floor around −95 dBFS (well below the old −80 dBFS gate); snoring 15 dB above it.
+        val sr = 16_000
+        val rnd = kotlin.random.Random(7)
+        val pcm = ShortArray(20 * sr) { i ->
+            val t = i.toDouble() / sr
+            val inSnore = (t % 4.0) in 1.0..2.6
+            val env = if (inSnore) kotlin.math.sin(Math.PI * ((t % 4.0) - 1.0) / 1.6).let { it * it } else 0.0
+            val s = rnd.nextDouble(-1.0, 1.0) * 0.6 + env * 3.5 * (kotlin.math.sin(2 * Math.PI * 90 * t) + 0.6 * kotlin.math.sin(2 * Math.PI * 180 * t))
+            s.toInt().toShort()
+        }
+        val d = SoundEventDetector(sr, 1024)
+        var n = 0
+        var i = 0
+        while (i + 1024 <= pcm.size) { if (d.process(pcm.copyOfRange(i, i + 1024), i * 1000L / sr).event != null) n++; i += 1024 }
+        assertTrue("events $n", n >= 3)
+    }
+
+    @Test
+    fun rustleWithShortGapsIsOneEvent() {
+        val sr = 16_000
+        val rnd = kotlin.random.Random(9)
+        // Background, then 3 noise bursts of 0.3 s separated by 0.3 s gaps.
+        val pcm = ShortArray(10 * sr) { i ->
+            val t = i.toDouble() / sr
+            val burst = t in 5.0..6.5 && ((t - 5.0) % 0.6) < 0.3
+            (rnd.nextDouble(-1.0, 1.0) * (if (burst) 2500 else 12)).toInt().toShort()
+        }
+        val d = SoundEventDetector(sr, 1024)
+        val events = ArrayList<SoundEventDetector.DetectedEvent>()
+        var i = 0
+        while (i + 1024 <= pcm.size) { d.process(pcm.copyOfRange(i, i + 1024), i * 1000L / sr).event?.let { events += it }; i += 1024 }
+        d.flush()?.let { events += it }
+        assertEquals(1, events.size)
+    }
+}

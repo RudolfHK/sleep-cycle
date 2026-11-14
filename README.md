@@ -120,6 +120,29 @@ and short, encrypted excerpts of detected events.
 > All phases, scores and sleep debt are **estimates** from phone sensors and are
 > labelled as such in the UI. This is not a medical device.
 
+### Tuning after the first real night
+
+* **Microphone:** `MIC` source (fallback `VOICE_RECOGNITION`) with AGC, noise
+  suppression and echo cancelling switched off. No absolute level gate. Events
+  start 7.5 dB above the adaptive floor by default; the Sound sensitivity slider
+  ranges from 11 to 4 dB.
+* **Segments:**
+  - Gaps under 0.6 s are bridged and events under 0.25 s are ignored.
+  - Faint or short environmental noise is not stored.
+  - Sounds are grouped into episodes (snoring gap ≤ 60 s, others ≤ 30 s).
+  - At most one audio excerpt is saved per category every 3 minutes.
+* **Phases:**
+  - The night's constant sound baseline is removed, and a rustle counts as
+    movement, not wake.
+  - Brief wake (< 2 min) is kept only with a strong movement.
+  - Minimum run lengths: deep 10 min, REM 5 min, light 3 min, awake 2 min.
+  - Stored nights are re-analysed once after an update; any night can also be
+    re-analysed from its report.
+* **Light:** the light sensor is registered without batching and re-registered
+  every 3 minutes, because many phones pause it while the screen is off. The
+  readings are counted and shown live; a night with a sensor but no readings
+  says so explicitly.
+
 ## Alarm reliability
 
 * The deadline is scheduled with `AlarmManager.setAlarmClock` **before** tracking
