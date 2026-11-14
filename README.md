@@ -40,6 +40,26 @@ score trend, sleep schedule, time in bed vs. asleep, weekday and weekend
 habits, sleep by weekday, duration distribution, best/worst night, sleep debt,
 phases, sounds and environment.
 
+### Night visualisations
+
+* **Night overview:** shown for the Day period in Statistics and in each report.
+  - The estimated sleep phases appear as colour bands plus a stepped hypnogram.
+  - Noise (estimated dB) is a filled area and light (lux, log scale) is a line.
+  - Everything shares one time axis, with markers for bedtime, falling asleep
+    and wake-up, and aligned tracks for movement and sound episodes below.
+  - Layer chips switch each layer on or off; a tap shows the values of all
+    layers at that minute.
+* **Sleep phases per night:** stacked stage minutes for each night, with
+  optional average-noise and darkness lines.
+* **Your typical night:** for each 15-minute slot of clock time, how often you
+  were in each phase across nights (100 % stacked; column height = share of
+  nights in bed), with average noise and light lines.
+* **Insights:** score and efficiency compared at the median split for noise,
+  light, bedtime, weekday/weekend and snoring, with group sizes. Shown only
+  with at least 6 nights and labelled as associations, not causes.
+* Every chart has a description, a legend with units and value ranges, a tap
+  read-out, and an explicit "no data" state.
+
 ## Architecture
 
 ```

@@ -353,4 +353,48 @@
     <string name="live_light_readings">Licht %1$s (%2$d Messungen)</string>
     <string name="live_light_waiting">Licht: warte auf Sensor …</string>
     <string name="reanalyze">Nacht neu auswerten</string>
+    <string name="layer_phases">Phasen</string>
+    <string name="layer_noise">Geräusch</string>
+    <string name="layer_light">Licht</string>
+    <string name="layer_movement">Bewegung</string>
+    <string name="layer_sounds">Geräusche</string>
+    <string name="layer_darkness">Dunkelheit</string>
+    <string name="night_overview">Nachtübersicht</string>
+    <string name="night_overview_desc">Alles, was in dieser Nacht aufgezeichnet wurde, auf einer Zeitachse. Farbige Bänder und die Stufenlinie zeigen die geschätzte Schlafphase (oben = wach, unten = Tiefschlaf). Die graue Fläche ist der Geräuschpegel, die gelbe Linie die Raumhelligkeit (logarithmisch). Darunter: Bewegung und Geräusch-Episoden. Tippen für Werte, zwei Finger oder Doppeltippen zum Zoomen.</string>
+    <string name="night_overview_imported">Diese Nacht wurde aus Sleep Cycle importiert und hat keine minutengenauen Daten, daher kann keine Übersicht gezeichnet werden.</string>
+    <string name="not_measured_short">Keine Daten</string>
+    <string name="readout_movement">Bewegung %1$.1f</string>
+    <string name="legend_hypnogram">Schlafphase (Stufenlinie)</string>
+    <string name="legend_noise_range">Geräusch, %1$s</string>
+    <string name="legend_no_noise">Geräusch: keine Daten</string>
+    <string name="legend_light_range">Licht, %1$s (log.)</string>
+    <string name="legend_no_light">Licht: keine Daten</string>
+    <string name="legend_sound_episodes">Geräusch-Episoden</string>
+    <string name="legend_markers">Markierungen über dem Diagramm: grau = ins Bett, blau = eingeschlafen, orange = aufgewacht.</string>
+    <string name="phases_per_night">Schlafphasen pro Nacht</string>
+    <string name="phases_per_night_desc">Jeder Balken ist eine Nacht: geschätzte Minuten Tief-, Leicht- und REM-Schlaf von unten gestapelt, Wachzeit oben. Optionale Linien zeigen den durchschnittlichen Geräuschpegel und wie dunkel es war, jeweils auf die Diagrammhöhe skaliert.</string>
+    <string name="readout_imported_night">%1$s · importiert · Schlaf %2$s (keine Phasen)</string>
+    <string name="readout_dark">%1$.0f %% dunkel</string>
+    <string name="legend_imported">Importiert (nur Gesamtschlaf)</string>
+    <string name="legend_avg_noise_scaled">Ø Geräusch (skaliert min–max)</string>
+    <string name="legend_dark_scaled">Zeit im Dunkeln (0–100 %)</string>
+    <string name="legend_avg_light_log">Ø Licht (logarithmisch)</string>
+    <string name="typical_night">Deine typische Nacht</string>
+    <string name="typical_night_desc">Basierend auf %1$d aufgezeichneten Nächten. Für jede Viertelstunde Uhrzeit zeigen die Farben, in wie vielen Nächten du in welcher Phase warst; die Säulenhöhe zeigt, wie oft du zu dieser Zeit im Bett warst. Linien zeigen durchschnittliches Geräusch und Licht zu dieser Zeit.</string>
+    <string name="readout_nobody_in_bed">nicht im Bett</string>
+    <string name="typical_night_height_hint">Volle Höhe = jede Nacht des Zeitraums. Importierte Nächte sind nicht enthalten.</string>
+    <string name="insights">Erkenntnisse</string>
+    <string name="insights_need_more">Erkenntnisse brauchen mindestens %1$d Nächte im Zeitraum (aktuell %2$d).</string>
+    <string name="insights_caution">Vergleiche innerhalb deiner eigenen Nächte, am Median geteilt. Sie zeigen Zusammenhänge, keine Ursachen, und werden mit mehr Nächten zuverlässiger.</string>
+    <string name="ins_quieter">Leiser (&lt; %1$s)</string>
+    <string name="ins_louder">Lauter</string>
+    <string name="ins_darker">Dunkler (&lt; %1$s)</string>
+    <string name="ins_brighter">Heller</string>
+    <string name="ins_earlier_bed">Früher ins Bett</string>
+    <string name="ins_later_bed">Später ins Bett</string>
+    <string name="ins_no_snoring">Ohne Schnarchen</string>
+    <string name="ins_snoring">Mit Schnarchen</string>
+    <string name="ins_no_difference">Kein deutlicher Unterschied in der Schlafbewertung.</string>
+    <string name="ins_better">%1$s: im Schnitt %2$s Punkte höhere Bewertung.</string>
+    <string name="ins_detail">%1$s: Bewertung %2$s, %3$d Nächte, Effizienz %4$s %% · %5$s: Bewertung %6$s, %7$d Nächte, Effizienz %8$s %%</string>
 </resources>

@@ -217,6 +217,8 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                 EstimateNote(Modifier.padding(top = 8.dp))
             }
 
+            if (s.hasPhaseData && d.epochs.isNotEmpty()) de.sleeptracker.app.ui.stats.NightOverviewPanel(d, calibration)
+
             SectionCard(stringResource(R.string.report_general)) {
                 StatGrid(
                     listOf(

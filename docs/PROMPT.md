@@ -343,3 +343,52 @@ Refined prompt (diagnosis → required change → how to verify):
 > stage runs with no run below its minimum and deep sleep concentrated early;
 > episode grouping; event bridging and minimum duration; quiet events below the
 > old −80 dBFS gate are detected.
+
+---
+
+# Iteration 6 — professional visualisation of noise, light and sleep phases
+
+Original request: *"For the daily, weekly etc. stats add better visuals for the
+noise, light and sleep phases during the night (daily should be a good zoomed-out
+one where noise, light and sleep phases are overlaid and so on). Better analysis
+and also descriptions or legend of what is shown. This should have a
+professional approach to visualising the recorded data."*
+
+Refined prompt:
+
+> **Principles.** One shared time axis per view; consistent colours everywhere
+> (stages as before, noise = warm grey, light = yellow, movement = blue);
+> every chart has a title, a one-sentence description of what it shows and how
+> to read it, a legend with units and the value range, and a tap read-out.
+> Charts open zoomed out; zoom and full screen work as elsewhere. Missing data
+> is shown as a gap and stated in the legend ("no light data"), never as zero.
+> Imported nights (no epochs) are excluded from per-minute charts with a note.
+>
+> **Day — "Night overview".** A single overlay chart for the selected night:
+> stage colour bands in the background, the hypnogram as a stepped line, noise
+> (estimated dB) as a filled area and light (lux, log scale) as a line, all on
+> the same time axis, with a bedtime/fell-asleep/wake-up marker row. Under it,
+> aligned compact tracks for movement and sound episodes. Layer chips switch
+> phases / noise / light / movement / sounds on and off. Tap → crosshair with a
+> read-out of all layers at that minute (time, stage, dB, lux, movement). The
+> night's key figures sit next to it.
+>
+> **Week / Month / Year / All.**
+> * *Phases per night*: stacked bars (deep, light, REM, awake minutes) per
+>   night with optional overlay lines for average noise and dark share
+>   (secondary, normalised scales stated in the legend).
+> * *Typical night profile*: for each 15-minute clock-time slot (evening →
+>   morning), the share of nights in each stage as a 100 % stacked area
+>   ("hypnodensity"), with average noise and light per slot as overlay lines and
+>   a faint "in bed" share. Answers "when am I usually in deep sleep, when is it
+>   loud or bright?".
+> * *Insights*: compare score (and efficiency) between quieter vs. louder
+>   nights, darker vs. brighter nights, earlier vs. later bedtimes, weekdays vs.
+>   weekends, nights with vs. without snoring — split at the median, with the
+>   number of nights per group; shown only with ≥ 6 nights and labelled as
+>   associations, not causes.
+>
+> **Implementation.** Aggregations (`NightProfileCalculator`,
+> `InsightsCalculator`) in `:sleepanalysis` with unit tests; charts in a
+> dedicated component file; profile limited to the latest 120 recorded nights
+> for performance.

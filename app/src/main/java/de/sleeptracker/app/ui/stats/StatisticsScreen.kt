@@ -42,6 +42,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.sleeptracker.analysis.DetailedStatistics
+import de.sleeptracker.analysis.Insight
+import de.sleeptracker.analysis.InsightsCalculator
+import de.sleeptracker.analysis.NightProfile
+import de.sleeptracker.analysis.NightProfileCalculator
+import de.sleeptracker.analysis.ProfileNight
+import de.sleeptracker.app.data.repo.SessionDetails
 import de.sleeptracker.analysis.DetailedStatisticsCalculator
 import de.sleeptracker.analysis.PeriodStatistics
 import de.sleeptracker.analysis.SleepScoreCalculator
@@ -110,6 +116,11 @@ data class StatsUiState(
     val months: List<MonthBucket> = emptyList(),
     val goalMinutes: Int = 480,
     val noiseCalibration: Int = 90,
+    /** Day view: full data of the selected night (null if none or imported). */
+    val dayDetails: SessionDetails? = null,
+    /** Typical-night profile over recorded nights of the period (not for Day). */
+    val profile: NightProfile? = null,
+    val insights: List<Insight> = emptyList(),
 )
 
 class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
@@ -127,6 +138,10 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
     fun openMonth(month: LocalDate) {
         val offset = ChronoUnit.MONTHS.between(LocalDate.now().withDayOfMonth(1), month.withDayOfMonth(1)).toInt()
         selection.value = StatPeriod.MONTH to offset.coerceAtMost(0)
+    }
+
+    companion object {
+        const val PROFILE_MAX_NIGHTS = 120
     }
 
     private fun dateOf(s: SleepSession) = runCatching { LocalDate.parse(s.sessionDate) }.getOrNull()
@@ -183,15 +198,41 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
                 )
             }
         }
+        val dayDetails = if (period == StatPeriod.DAY) {
+            nights.lastOrNull { it.hasPhaseData }?.let { runCatching { c.sleep.details(it.id) }.getOrNull() }
+        } else null
+        val profile = if (period != StatPeriod.DAY) {
+            val recorded = nights.filter { it.hasPhaseData }.takeLast(PROFILE_MAX_NIGHTS)
+            val signals = c.database.signalDao()
+            NightProfileCalculator.compute(
+                recorded.map { n ->
+                    ProfileNight(
+                        zoneOffsetMinutes = n.zoneOffsetMinutes,
+                        runs = signals.stages(n.id).map { Triple(it.timestamp, it.durationSeconds * 1000L, it.stageType) },
+                        samples = signals.epochs(n.id).map {
+                            Triple(
+                                it.startMillis,
+                                if (it.hasSound && it.soundLevelDb > -100f) it.soundLevelDb else Float.NaN,
+                                if (it.hasLight && it.lightLux >= 0f) it.lightLux else Float.NaN,
+                            )
+                        },
+                    )
+                },
+            )
+        } else null
         return StatsUiState(
             period = period, offset = offset, from = from, to = to, stats = stats, previous = previous,
             detailed = DetailedStatisticsCalculator.compute(records, goal),
             nights = nights, months = months, goalMinutes = goal,
+            dayDetails = dayDetails, profile = profile,
+            insights = if (period == StatPeriod.DAY) emptyList() else InsightsCalculator.compute(records),
         )
     }
 }
 
 private fun nightDate(s: SleepSession): LocalDate? = runCatching { LocalDate.parse(s.sessionDate) }.getOrNull()
+
+internal fun shortLabelPublic(s: SleepSession, period: StatPeriod) = shortLabel(s, period)
 
 private fun shortLabel(s: SleepSession, period: StatPeriod): String {
     val d = nightDate(s) ?: return "?"
@@ -233,7 +274,19 @@ fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
             return@Column
         }
 
+        if (st.period == StatPeriod.DAY) {
+            val day = st.dayDetails
+            if (day != null) NightOverviewPanel(day, st.noiseCalibration)
+            else SectionCard(stringResource(R.string.night_overview)) {
+                Text(stringResource(R.string.night_overview_imported), style = MaterialTheme.typography.bodySmall)
+            }
+        }
         KpiGrid(st)
+        if (st.period != StatPeriod.DAY) {
+            PhaseStackPanel(st)
+            ProfilePanel(st.profile, st.noiseCalibration)
+            InsightsPanel(st.insights, s.nights, st.noiseCalibration)
+        }
         DurationPanel(st, onOpenReport)
         if (st.months.size > 1) MonthsPanel(st, vm::openMonth)
         ScorePanel(st, onOpenReport)

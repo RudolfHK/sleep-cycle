@@ -354,4 +354,48 @@
     <string name="live_light_readings">Light %1$s (%2$d readings)</string>
     <string name="live_light_waiting">Light: waiting for sensor…</string>
     <string name="reanalyze">Re-analyse night</string>
+    <string name="layer_phases">Phases</string>
+    <string name="layer_noise">Noise</string>
+    <string name="layer_light">Light</string>
+    <string name="layer_movement">Movement</string>
+    <string name="layer_sounds">Sounds</string>
+    <string name="layer_darkness">Darkness</string>
+    <string name="night_overview">Night overview</string>
+    <string name="night_overview_desc">Everything recorded this night on one time axis. Coloured bands and the stepped line show the estimated sleep phase (top = awake, bottom = deep). The grey area is the noise level, the yellow line the room light (log scale). Below: movement and sound episodes. Tap for values, pinch or double-tap to zoom.</string>
+    <string name="night_overview_imported">This night was imported from Sleep Cycle and has no minute-by-minute data, so no overview can be drawn.</string>
+    <string name="not_measured_short">No data</string>
+    <string name="readout_movement">movement %1$.1f</string>
+    <string name="legend_hypnogram">Sleep phase (stepped line)</string>
+    <string name="legend_noise_range">Noise, %1$s</string>
+    <string name="legend_no_noise">Noise: no data</string>
+    <string name="legend_light_range">Light, %1$s (log)</string>
+    <string name="legend_no_light">Light: no data</string>
+    <string name="legend_sound_episodes">Sound episodes</string>
+    <string name="legend_markers">Markers above the chart: grey = went to bed, blue = fell asleep, orange = woke up.</string>
+    <string name="phases_per_night">Sleep phases per night</string>
+    <string name="phases_per_night_desc">Each bar is one night: estimated minutes of deep, light and REM sleep stacked from the bottom, awake time on top. Optional lines show the night\'s average noise and how dark it was, each scaled to the chart height.</string>
+    <string name="readout_imported_night">%1$s · imported · asleep %2$s (no phases)</string>
+    <string name="readout_dark">%1$.0f %% dark</string>
+    <string name="legend_imported">Imported (total sleep only)</string>
+    <string name="legend_avg_noise_scaled">Avg. noise (scaled min–max)</string>
+    <string name="legend_dark_scaled">Time in darkness (0–100 %)</string>
+    <string name="legend_avg_light_log">Avg. light (log scale)</string>
+    <string name="typical_night">Your typical night</string>
+    <string name="typical_night_desc">Based on %1$d recorded nights. For every 15 minutes of clock time, the colours show in how many nights you were in each phase; the column height shows how often you were in bed at that time. Lines show average noise and light at that time.</string>
+    <string name="readout_nobody_in_bed">not in bed</string>
+    <string name="typical_night_height_hint">Full height = every night of the period. Imported nights are not included.</string>
+    <string name="insights">Insights</string>
+    <string name="insights_need_more">Insights need at least %1$d nights in the period (now %2$d).</string>
+    <string name="insights_caution">Comparisons within your own nights, split at the median. They show associations, not causes, and become more reliable with more nights.</string>
+    <string name="ins_quieter">Quieter (&lt; %1$s)</string>
+    <string name="ins_louder">Louder</string>
+    <string name="ins_darker">Darker (&lt; %1$s)</string>
+    <string name="ins_brighter">Brighter</string>
+    <string name="ins_earlier_bed">Earlier to bed</string>
+    <string name="ins_later_bed">Later to bed</string>
+    <string name="ins_no_snoring">No snoring</string>
+    <string name="ins_snoring">With snoring</string>
+    <string name="ins_no_difference">No clear difference in sleep score.</string>
+    <string name="ins_better">%1$s nights scored %2$s points higher.</string>
+    <string name="ins_detail">%1$s: score %2$s, %3$d nights, efficiency %4$s %% · %5$s: score %6$s, %7$d nights, efficiency %8$s %%</string>
 </resources>
