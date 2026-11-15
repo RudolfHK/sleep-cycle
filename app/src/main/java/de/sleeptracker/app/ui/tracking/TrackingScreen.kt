@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.sleeptracker.app.R
 import de.sleeptracker.app.container
 import de.sleeptracker.app.tracking.SleepTrackingService
+import de.sleeptracker.app.tracking.StopState
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.components.ConfirmDialog
 import de.sleeptracker.app.ui.sleep.modeLabel
@@ -69,11 +70,36 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
         }
     }
     LaunchedEffect(Unit) { delay(8_000); waitedForStart = true }
-    LaunchedEffect(status, waitedForStart) {
-        if (status == null && waitedForStart && !stopping) onFinished(null)
+    val stopState by context.container.tracking.stopState.collectAsStateWithLifecycle()
+    LaunchedEffect(status, waitedForStart, stopState) {
+        if (status == null && waitedForStart && !stopping && stopState is StopState.Idle) onFinished(null)
+    }
+    LaunchedEffect(stopState) {
+        val st = stopState
+        if (st is StopState.Done) {
+            context.container.tracking.acknowledgeStop()
+            onFinished(st.sessionId)
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black).padding(24.dp)) {
+        val st = stopState
+        if (st is StopState.Stopping || stopping && st !is StopState.Failed) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = dim)
+                Spacer(Modifier.height(16.dp))
+                Text(stringResource(R.string.stop_saving), color = dim)
+            }
+            return@Box
+        }
+        if (st is StopState.Failed) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(stringResource(R.string.stop_failed), color = Color(0xFFB07070))
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { context.container.tracking.acknowledgeStop(); onFinished(null) }) { Text(stringResource(R.string.back)) }
+            }
+            return@Box
+        }
         val s = status
         if (s == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = dim)
@@ -154,10 +180,7 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
             confirm = stringResource(R.string.tracking_stop),
             onConfirm = {
                 stopping = true
-                scope.launch {
-                    val id = context.container.tracking.stopAndFinalize()
-                    onFinished(id)
-                }
+                context.container.tracking.requestStop()
             },
             onDismiss = { confirm = false },
         )

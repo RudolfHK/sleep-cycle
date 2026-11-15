@@ -131,6 +131,9 @@ interface SignalDao {
     @Query("SELECT * FROM sound_event ORDER BY sessionId, timestamp")
     suspend fun allSoundEvents(): List<SoundEventRecord>
 
+    @Query("DELETE FROM sound_event WHERE sessionId = :sessionId")
+    suspend fun deleteSoundEvents(sessionId: Long)
+
     @Query("UPDATE sound_event SET audioFilePath = :path WHERE id = :id")
     suspend fun setAudioPath(id: Long, path: String)
 

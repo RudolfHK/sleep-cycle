@@ -41,6 +41,9 @@ class SleepViewModel(private val c: AppContainer) : ViewModel() {
             interrupted = unfinished.filter { it.sessionStatus == SessionStatus.INTERRUPTED || (live == null && it.sessionStatus == SessionStatus.ACTIVE && !SleepTrackingService.isRunning) },
             tracking = live != null,
         )
+    }.combine(c.tracking.finalizing) { st, fin ->
+        // A night that is being saved right now is not "interrupted".
+        if (fin == null) st else st.copy(interrupted = st.interrupted.filter { it.id != fin })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
     fun setMode(mode: TrackingMode) = viewModelScope.launch {

@@ -121,6 +121,7 @@ class SleepRepository(
         val score = SleepScoreCalculator(user.scoreWeights())
             .score(summary, user.sleepGoalMinutes, previousBedtimes, session.zoneOffsetMinutes)
         val events = signals.soundEvents(sessionId).filter { it.isReportable() }
+        fun soundSeconds(e: SoundEventRecord) = if (e.soundSeconds > 0f) e.soundSeconds else e.durationSeconds
         val env = EnvironmentAnalyzer.analyze(epochs, summary.sleepOnsetMillis)
         val updated = session.withEnvironment(env).copy(
             endTimestamp = end,
@@ -137,9 +138,10 @@ class SleepRepository(
             interruptions = summary.interruptions.size,
             stability = summary.stability,
             movementsPerHour = summary.movementsPerHour,
-            snoreEvents = events.count { it.eventType == SoundEventType.SNORE },
-            snoreSeconds = events.filter { it.eventType == SoundEventType.SNORE }.sumOf { it.durationSeconds.toDouble() }.toInt(),
-            coughEvents = events.count { it.eventType == SoundEventType.COUGH },
+            // Stored events are episodes: counts are the individual sounds inside them.
+            snoreEvents = events.filter { it.eventType == SoundEventType.SNORE }.sumOf { it.eventCount },
+            snoreSeconds = events.filter { it.eventType == SoundEventType.SNORE }.sumOf { soundSeconds(it).toDouble() }.toInt(),
+            coughEvents = events.filter { it.eventType == SoundEventType.COUGH }.sumOf { it.eventCount },
             talkEvents = events.count { it.eventType == SoundEventType.TALK },
             noiseEvents = events.count { it.eventType.isNoise },
         )
@@ -154,15 +156,52 @@ class SleepRepository(
      * Re-runs the analysis for nights recorded in this app (stored 30-s epochs are kept, so
      * improved algorithms apply to past nights). Imported nights are left alone.
      */
-    suspend fun reanalyzeAll(): Int {
+    suspend fun reanalyzeAll(consolidateSounds: Boolean = false): Int {
         var n = 0
+        val sensitivity = settings.user().soundSensitivity
         for (s in sessions.allCompleted()) {
             if (!s.hasPhaseData) continue
+            if (consolidateSounds) runCatching { consolidateSoundEvents(s.id, sensitivity) }
             if (signals.epochs(s.id).isEmpty()) continue
             finalizeSession(s.id, s.endTimestamp ?: s.startTimestamp)
             n++
         }
         return n
+    }
+
+    /**
+     * Converts a night recorded with single sound events into episodes with the current rules
+     * (one-time migration). Recordings of events that are not kept are deleted.
+     */
+    suspend fun consolidateSoundEvents(sessionId: Long, sensitivity: Float) {
+        val events = signals.soundEvents(sessionId)
+        if (events.isEmpty()) return
+        val core = events.map { de.sleeptracker.core.SoundEvent(it.timestamp, (it.durationSeconds * 1000).toLong(), it.eventType, it.confidence, it.intensityDb) }
+        val episodes = de.sleeptracker.audio.EpisodeAccumulator.consolidate(
+            core, de.sleeptracker.audio.EventRules(sensitivity), events.map { it.eventCount },
+        )
+        val keep = HashSet<String>()
+        val records = episodes.map { (rec, idx) ->
+            val members = idx.map { events[it] }
+            val audio = members.filter { it.audioFilePath != null }.maxByOrNull { it.intensityDb }?.audioFilePath
+            audio?.let(keep::add)
+            SoundEventRecord(
+                sessionId = sessionId,
+                timestamp = rec.event.startMillis,
+                eventType = rec.event.type,
+                durationSeconds = rec.event.durationMillis / 1000f,
+                confidence = rec.event.confidence,
+                intensityDb = rec.event.intensityDb,
+                audioFilePath = audio,
+                eventCount = members.sumOf { it.eventCount },
+                soundSeconds = members.sumOf { (if (it.soundSeconds > 0f) it.soundSeconds else it.durationSeconds).toDouble() }.toFloat(),
+            )
+        }
+        events.mapNotNull { it.audioFilePath }.filter { it !in keep }.distinct().forEach { recordings.deleteByPath(it) }
+        db.withTransaction {
+            signals.deleteSoundEvents(sessionId)
+            if (records.isNotEmpty()) signals.insertSoundEvents(records)
+        }
     }
 
     /** Fills environment figures for nights recorded before they existed (once, cheap). */

@@ -348,8 +348,8 @@
     <string name="chart_zoom_hint_zoomed">Drag sideways to scroll · double-tap to show all</string>
     <string name="close">Close</string>
     <string name="episode_detail">%1$d× · %2$s of sound · peak %3$s dB above background</string>
-    <string name="show_all_events">Show all %1$d single events</string>
-    <string name="hide_events">Hide single events (%1$d)</string>
+    <string name="show_all_events">Show all %1$d stored moments</string>
+    <string name="hide_events">Hide list (%1$d)</string>
     <string name="light_no_readings">No readings: the light sensor exists but sent no values during the night. Some phones switch it off while the screen is off.</string>
     <string name="live_light_readings">Light %1$s (%2$d readings)</string>
     <string name="live_light_waiting">Light: waiting for sensor…</string>
@@ -398,4 +398,6 @@
     <string name="ins_no_difference">No clear difference in sleep score.</string>
     <string name="ins_better">%1$s nights scored %2$s points higher.</string>
     <string name="ins_detail">%1$s: score %2$s, %3$d nights, efficiency %4$s %% · %5$s: score %6$s, %7$d nights, efficiency %8$s %%</string>
+    <string name="stop_saving">Saving and analysing your night…</string>
+    <string name="stop_failed">The night could not be analysed. Your data is kept – open the Sleep tab to analyse it again.</string>
 </resources>

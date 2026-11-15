@@ -392,3 +392,51 @@ Refined prompt:
 > `InsightsCalculator`) in `:sleepanalysis` with unit tests; charts in a
 > dedicated component file; profile limited to the latest 120 recorded nights
 > for performance.
+
+---
+
+# Iteration 7 — stop-tracking bug and far fewer, meaningful sound events
+
+Original feedback: *"There still seem to be some bugs (after stopping tracking I
+just got infinite loading, and others). Events during the night are too
+sensitive: Sleep Cycle recorded maybe 10–20, this app 600 in one night. Only real
+moments or louder things should be captured."*
+
+Refined prompt:
+
+> **1. Stop tracking must always finish.** Root causes found: the stop and the
+> whole-night analysis run in the tracking screen's coroutine on the main thread
+> (blocking thread join, CPU-heavy staging); a stop from the notification runs in
+> the service's own scope, which the service cancels while shutting down, so the
+> night is never analysed; the screen shows a bare spinner forever on any
+> failure; while analysing, the Sleep screen offers "resume / discard" for the
+> same night. Fix: run stop + analysis once, in the application scope, off the
+> main thread, with time limits for each shutdown step; publish a stop state
+> (stopping → done / failed) that the tracking screen observes and renders as
+> "Saving and analysing your night…"; on failure keep the night (interrupted,
+> recoverable) and show an error with a way back; never show the interrupted
+> card for a night that is being finalised; stop the service cleanly when a
+> stop arrives while it is not running.
+>
+> **2. Sound events like Sleep Cycle (≈10–30 per night).** Store *episodes*, not
+> individual sounds: an online accumulator groups detected sounds per category
+> (snoring gap ≤ 60 s, others ≤ 30 s) and stores one event per episode with its
+> sound count, total sound time, peak and the loudest excerpt. Episodes are kept
+> only when they are real moments:
+> * snoring — ≥ 3 snores or ≥ 10 s of snoring;
+> * cough — peak ≥ 18 dB above background, confidence ≥ 0.6;
+> * talking — ≥ 1.5 s of speech, peak ≥ 12 dB;
+> * environmental noise — peak ≥ 22 dB, or ≥ 3 s long and ≥ 16 dB.
+> The sound-sensitivity setting shifts all thresholds by ±6 dB; the default is
+> tuned for Sleep Cycle-like counts. The detector's start threshold rises to
+> 9 dB by default. Snore/cough counts keep the number of individual sounds
+> (new `eventCount` column, migration v5). Existing nights are consolidated once
+> into episodes with the same rules (recordings of discarded events are deleted).
+>
+> **3. Other robustness fixes** found while auditing: analysis runs on a
+> background dispatcher; recompute heavy statistics only when nights change;
+> the notification stop action no longer leaks a service.
+>
+> **Tests:** accumulator turns hundreds of periodic snores into a handful of
+> episodes, rejects faint noise, keeps a loud door bang and a real cough;
+> consolidation of stored events; a simulated noisy night stays below 40 events.

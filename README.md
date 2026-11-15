@@ -146,6 +146,21 @@ and short, encrypted excerpts of detected events.
   suppression and echo cancelling switched off. No absolute level gate. Events
   start 7.5 dB above the adaptive floor by default; the Sound sensitivity slider
   ranges from 11 to 4 dB.
+* **Stored sound moments (episodes):**
+  - Detected sounds are grouped online into episodes, and only real moments
+    are stored:
+    - snoring: ≥ 3 snores or ≥ 10 s;
+    - cough: ≥ 18 dB above background;
+    - talking: ≥ 1.5 s of speech;
+    - noise: ≥ 22 dB, or ≥ 3 s long and ≥ 16 dB.
+  - Each episode keeps its sound count and its loudest excerpt; a typical night
+    has 10–30 instead of hundreds.
+  - The sensitivity slider shifts these thresholds by ±6 dB; the event start
+    threshold defaults to 9 dB.
+  - Older nights are consolidated once after the update.
+* **Stopping a night** runs once in the application scope, off the main thread,
+  with time limits. The screen shows "Saving and analysing…" and, on failure,
+  an error; the night is kept as interrupted and is never lost.
 * **Segments:**
   - Gaps under 0.6 s are bridged and events under 0.25 s are ignored.
   - Faint or short environmental noise is not stored.

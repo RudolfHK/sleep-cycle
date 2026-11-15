@@ -42,6 +42,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import de.sleeptracker.app.tracking.StopState
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.sqrt
@@ -175,8 +178,15 @@ class AlarmRingService : Service(), SensorEventListener {
         c.runtime.setPlan(null)
         stopRinging()
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_SNOOZED)
-        // Waking up ends the night: finish tracking and build the report.
-        val sessionId = c.tracking.stopAndFinalize()
+        // Waking up ends the night: finish tracking and build the report (same path as the Stop
+        // button, so an open tracking screen follows along).
+        c.tracking.requestStop()
+        val sessionId = withTimeoutOrNull(60_000) {
+            when (val st = c.tracking.stopState.first { it is StopState.Done || it is StopState.Failed }) {
+                is StopState.Done -> st.sessionId
+                else -> null
+            }
+        }
         val reportId = sessionId ?: p?.sessionId?.takeIf { it > 0 }
         if (reportId != null) c.tracking.notifyReportReady(reportId)
         AlarmRingState.lastReportSessionId = reportId

@@ -35,6 +35,9 @@ import de.sleeptracker.app.data.db.MovementEventRecord
 import de.sleeptracker.app.data.db.SoundEventRecord
 import de.sleeptracker.app.data.db.UserSettings
 import de.sleeptracker.app.ui.MainActivity
+import de.sleeptracker.audio.EpisodeAccumulator
+import de.sleeptracker.audio.EpisodeRecord
+import de.sleeptracker.audio.EventRules
 import de.sleeptracker.audio.SoundEpisodes
 import de.sleeptracker.audio.SoundEventDetector
 import de.sleeptracker.core.EPOCH_MILLIS
@@ -122,7 +125,8 @@ class SleepTrackingService : Service(), SensorEventListener {
     private var lightSensor: Sensor? = null
     private var lightRegisteredAt = 0L
     private val lightReadings = java.util.concurrent.atomic.AtomicInteger(0)
-    private val lastExcerptAt = HashMap<SoundCategory, Long>()
+    private val episodeLock = Any()
+    private var episodes = EpisodeAccumulator()
     private var audioEffects: List<android.media.audiofx.AudioEffect> = emptyList()
     private var wakeLock: PowerManager.WakeLock? = null
     private var tickerJob: Job? = null
@@ -146,7 +150,9 @@ class SleepTrackingService : Service(), SensorEventListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            scope.launch { applicationContext.container.tracking.stopAndFinalize() }
+            // Runs in the application scope: this service's own scope is cancelled when it stops.
+            applicationContext.container.tracking.requestStop()
+            if (sessionId <= 0) stopSelf()
             return START_NOT_STICKY
         }
         val wantsMic = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -168,6 +174,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             startMillis = session.startTimestamp
             mode = session.trackingMode
             user = c.settings.user()
+            synchronized(episodeLock) { episodes = EpisodeAccumulator(EventRules(user.soundSensitivity)) }
             source = session.sensorSource
             val useMic = source.usesSound && micAllowed
             val useMotion = source.usesMotion
@@ -375,35 +382,36 @@ class SleepTrackingService : Service(), SensorEventListener {
 
     private fun handleSoundEvent(detected: SoundEventDetector.DetectedEvent) {
         val e = detected.event
+        // Every detected sound counts for the sleep analysis (activity, snoring time)...
         synchronized(lock) { aggregator?.onSoundEvent(e.startMillis, e.type == SoundEventType.SNORE, e.durationMillis) }
         if (!categoryEnabled(e.type)) return
-        // Faint or very short environmental noise is counted as activity only, not stored.
-        if (!SoundEpisodes.isReportable(e)) return
-        soundEventCount++
-        // At most one audio excerpt per category every few minutes (one per snoring episode, etc.).
-        val keepAudio = synchronized(lastExcerptAt) {
-            val last = lastExcerptAt[e.type.category] ?: Long.MIN_VALUE
-            if (e.startMillis - last >= EXCERPT_INTERVAL_MILLIS) { lastExcerptAt[e.type.category] = e.startMillis; true } else false
-        }
+        // ...but only whole episodes that are real moments are stored (Sleep Cycle-like counts).
+        val closed = synchronized(episodeLock) { episodes.add(e, detected.pcm) }
+        if (closed.isNotEmpty()) scope.launch { closed.forEach { persistEpisode(it) } }
+    }
+
+    private suspend fun persistEpisode(r: EpisodeRecord) {
+        val c = applicationContext.container
         val sid = sessionId
-        scope.launch {
-            val c = applicationContext.container
-            dbMutex.withLock {
-                val id = c.sleep.addSoundEvent(
-                    SoundEventRecord(
-                        sessionId = sid,
-                        timestamp = e.startMillis,
-                        eventType = e.type,
-                        durationSeconds = e.durationMillis / 1000f,
-                        confidence = e.confidence,
-                        intensityDb = e.intensityDb,
-                    ),
-                )
-                val pcm = detected.pcm
-                if (user.audioRecordingEnabled && pcm != null && keepAudio) {
-                    val path = c.recordings.save(sid, id, e.type, e.startMillis, pcm, SAMPLE_RATE, user.automaticRecordingDeletionDays)
-                    if (path != null) c.database.signalDao().setAudioPath(id, path)
-                }
+        val e = r.event
+        dbMutex.withLock {
+            val id = c.sleep.addSoundEvent(
+                SoundEventRecord(
+                    sessionId = sid,
+                    timestamp = e.startMillis,
+                    eventType = e.type,
+                    durationSeconds = e.durationMillis / 1000f,
+                    confidence = e.confidence,
+                    intensityDb = e.intensityDb,
+                    eventCount = r.count,
+                    soundSeconds = r.soundMillis / 1000f,
+                ),
+            )
+            soundEventCount++
+            val pcm = r.pcm
+            if (user.audioRecordingEnabled && pcm != null) {
+                val path = c.recordings.save(sid, id, e.type, e.startMillis, pcm, SAMPLE_RATE, user.automaticRecordingDeletionDays)
+                if (path != null) c.database.signalDao().setAudioPath(id, path)
             }
         }
     }
@@ -432,6 +440,8 @@ class SleepTrackingService : Service(), SensorEventListener {
             snapshot = if (decider != null) nightEpochs.toList() else emptyList()
         }
         refreshLight(now)
+        val closedEpisodes = synchronized(episodeLock) { episodes.closeIdle(now) }
+        closedEpisodes.forEach { persistEpisode(it) }
         if (now - lastFlushMillis >= FLUSH_INTERVAL_MILLIS) flush()
         evaluateSmartAlarm(now, snapshot)
         if (closed.isNotEmpty()) withContext(Dispatchers.Main) { updateNotification() }
@@ -482,7 +492,7 @@ class SleepTrackingService : Service(), SensorEventListener {
         if (!stopping.compareAndSet(false, true)) return
         tickerJob?.cancel()
         withContext(Dispatchers.Main) { stopSensors() }
-        audioThread?.join(2_000)
+        withContext(Dispatchers.IO) { audioThread?.join(2_000) }
         withContext(NonCancellable) {
             synchronized(lock) {
                 aggregator?.let { agg ->
@@ -491,10 +501,21 @@ class SleepTrackingService : Service(), SensorEventListener {
                 }
             }
             flush()
-            // Wait briefly for pending sound-event writes.
-            dbMutex.withLock { }
+            // Store episodes still open at the end of the night, then wait for pending writes.
+            val open = synchronized(episodeLock) { episodes.flushAll() }
+            withTimeoutOrNull(10_000) { open.forEach { persistEpisode(it) } }
+            withTimeoutOrNull(10_000) { dbMutex.withLock { } }
         }
         withContext(Dispatchers.Main) { stopSelfCompletely() }
+    }
+
+    /** Last resort when an orderly shutdown timed out: release everything without waiting. */
+    fun forceStop() {
+        stopping.set(true)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            stopSensors()
+            stopSelfCompletely()
+        }
     }
 
     private fun stopSensors() {

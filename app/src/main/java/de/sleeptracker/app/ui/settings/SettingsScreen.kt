@@ -217,7 +217,7 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             }
             SettingSlider(
                 stringResource(R.string.sound_sensitivity), user.soundSensitivity,
-                "%.0f %% · %.1f dB".format(user.soundSensitivity * 100, 11f - 7f * user.soundSensitivity), 0f..1f,
+                "%.0f %% · %.1f dB".format(user.soundSensitivity * 100, 13f - 8f * user.soundSensitivity), 0f..1f,
             ) { v ->
                 vm.user { it.copy(soundSensitivity = v) }
             }

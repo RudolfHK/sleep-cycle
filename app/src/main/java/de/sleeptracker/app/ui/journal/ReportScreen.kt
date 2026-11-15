@@ -306,7 +306,14 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                                 Text(
-                                    stringResource(R.string.episode_detail, ep.count, durationSecondsText(ep.soundMillis / 1000), "%.0f".format(ep.peakDb)),
+                                    stringResource(
+                                        R.string.episode_detail,
+                                        ep.eventIndices.sumOf { d.soundEvents[it].eventCount },
+                                        durationSecondsText(
+                                            ep.eventIndices.sumOf { i -> d.soundEvents[i].let { e -> if (e.soundSeconds > 0f) e.soundSeconds else e.durationSeconds }.toDouble() }.toLong(),
+                                        ),
+                                        "%.0f".format(ep.peakDb),
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

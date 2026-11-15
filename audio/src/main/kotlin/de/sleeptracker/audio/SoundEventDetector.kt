@@ -47,8 +47,8 @@ class SoundEventDetector(
 
     private val extractor = FeatureExtractor(sampleRate, frameSize)
     private val floor = NoiseFloorTracker()
-    /** Start threshold above the noise floor: 11 dB (low sensitivity) … 4 dB (high); default 7.5 dB. */
-    val onDb = 11f - 7f * sensitivity.coerceIn(0f, 1f)
+    /** Start threshold above the noise floor: 13 dB (low sensitivity) … 5 dB (high); default 9 dB. */
+    val onDb = 13f - 8f * sensitivity.coerceIn(0f, 1f)
     private val activeDb = minOf(5f, onDb - 1f)
     /** Only rejects digital silence; quiet rooms are handled by the relative noise floor. */
     private val absoluteMinDb = -110f

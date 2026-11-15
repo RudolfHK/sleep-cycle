@@ -209,6 +209,10 @@ data class SoundEventRecord(
     val confidence: Float,
     val intensityDb: Float,
     val audioFilePath: String? = null,
+    /** v5: number of individual sounds in this episode (e.g. snores). */
+    val eventCount: Int = 1,
+    /** v5: total sound time of the episode in seconds (≤ duration). */
+    val soundSeconds: Float = 0f,
 )
 
 @Serializable
