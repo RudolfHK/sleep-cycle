@@ -400,4 +400,5 @@
     <string name="ins_detail">%1$s: score %2$s, %3$d nights, efficiency %4$s %% · %5$s: score %6$s, %7$d nights, efficiency %8$s %%</string>
     <string name="stop_saving">Saving and analysing your night…</string>
     <string name="stop_failed">The night could not be analysed. Your data is kept – open the Sleep tab to analyse it again.</string>
+    <string name="legend_in_bed_awake">In bed, awake</string>
 </resources>

@@ -399,4 +399,5 @@
     <string name="ins_detail">%1$s: Bewertung %2$s, %3$d Nächte, Effizienz %4$s %% · %5$s: Bewertung %6$s, %7$d Nächte, Effizienz %8$s %%</string>
     <string name="stop_saving">Deine Nacht wird gespeichert und ausgewertet …</string>
     <string name="stop_failed">Die Nacht konnte nicht ausgewertet werden. Deine Daten bleiben erhalten – im Tab Schlaf kannst du sie erneut auswerten.</string>
+    <string name="legend_in_bed_awake">Im Bett, wach</string>
 </resources>

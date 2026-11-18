@@ -98,15 +98,15 @@ fun LineChart(
                 return (zoom?.toView(f) ?: f) * size.width
             }
             fun y(v: Float) = size.height - (v - min) / (max - min) * size.height * 0.9f - size.height * 0.05f
-            val path = Path()
-            var drawing = false
-            values.forEachIndexed { i, v ->
-                if (v.isNaN()) { drawing = false; return@forEachIndexed }
-                val x = xOf(i)
-                if (!drawing) path.moveTo(x, y(v)) else path.lineTo(x, y(v))
-                drawing = true
+            // Smooth spline per continuous segment, with a soft gradient underneath.
+            val segments = smoothSegments(values.mapIndexed { i, v -> if (v.isNaN()) null else Offset(xOf(i), y(v)) })
+            for (seg in segments) {
+                if (seg.size < 2) { drawCircle(color, 2.5f, seg[0]); continue }
+                val area = splinePath(seg)
+                area.lineTo(seg.last().x, size.height); area.lineTo(seg.first().x, size.height); area.close()
+                drawPath(area, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(color.copy(alpha = 0.26f), color.copy(alpha = 0.02f))))
+                drawPath(splinePath(seg), color, style = Stroke(width = 2f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
-            drawPath(path, color, style = Stroke(width = 2f))
             reference?.takeIf { it in min..max }?.let {
                 drawLine(refColor, Offset(0f, y(it)), Offset(size.width, y(it)), 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
             }

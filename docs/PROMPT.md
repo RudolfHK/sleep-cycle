@@ -440,3 +440,41 @@ Refined prompt:
 > **Tests:** accumulator turns hundreds of periodic snores into a handful of
 > episodes, rejects faint noise, keeps a loud door bang and a real cough;
 > consolidation of stored events; a simulated noisy night stays below 40 events.
+
+---
+
+# Iteration 8 — smoother, calmer charts
+
+Original request: *"Make the visualisations prettier, especially the ones with
+few bars which seem kind of irregular. Better to have spline visualisations with
+maybe only faint bars in the background."*
+
+Refined prompt:
+
+> **Diagnosis.** Bar width is 70 % of the slot, so with few values (week view,
+> weekdays, histogram) bars become very wide blocks; bar edges are not snapped
+> to whole pixels, so neighbouring bars render with uneven widths and gaps;
+> lines are straight polylines.
+>
+> **Chart style (all trend charts).**
+> * The value series is a **smooth monotone cubic spline** (Fritsch–Carlson:
+>   passes through every value, no overshoot above/below the data, so a 0 never
+>   dips below the axis) with a soft vertical gradient fill underneath.
+> * Values are also shown as **faint background bars** (≈ 15 % opacity) with a
+>   capped width (≤ 22 dp) and pixel-snapped edges, centred in their slot;
+>   point markers on the curve when ≤ 40 points are visible.
+> * Secondary series (e.g. 7-night average) as a thinner spline; reference lines
+>   (goal, average) dashed with a small label; 3 horizontal grid lines with
+>   y-axis labels in the chart's unit; gaps where data is missing.
+> * Tap highlights the point (ring + vertical guide) and shows the read-out;
+>   zoom/pan/full-screen behave as before.
+> * Time in bed vs. asleep: two splines with the area between them filled
+>   (the "awake in bed" band).
+> * Typical-night profile: stacked areas drawn with smoothed boundaries.
+> * Night-time lines (noise, light) in reports use the same spline + gradient.
+> * Stacked phase bars keep bars (they encode composition) but get the width
+>   cap and pixel snapping.
+>
+> **Implementation.** `MonotoneSpline` (pure Kotlin, unit tested: interpolates
+> nodes, preserves monotonic segments, no overshoot, handles 1–2 points) and a
+> reusable `TrendChart` composable used by every statistics trend.

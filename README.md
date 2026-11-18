@@ -40,6 +40,16 @@ score trend, sleep schedule, time in bed vs. asleep, weekday and weekend
 habits, sleep by weekday, duration distribution, best/worst night, sleep debt,
 phases, sounds and environment.
 
+### Chart style
+
+Trend charts draw a smooth monotone cubic spline (Fritsch–Carlson): it passes
+through every value and never overshoots the data. Underneath are a soft
+gradient fill and faint background bars, capped at 22 dp and pixel-snapped.
+They also have point markers, y-axis grid labels, dashed reference lines such
+as the goal or average, and a tap highlight with a read-out. Time in bed vs.
+asleep is drawn as two splines with the awake-in-bed band filled between them,
+and the typical-night profile uses smoothed stacked areas.
+
 ### Night visualisations
 
 * **Night overview:** shown for the Day period in Statistics and in each report.

@@ -60,6 +60,11 @@ import de.sleeptracker.app.data.db.SleepStatistics
 import de.sleeptracker.app.data.repo.toNightRecord
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.components.BarChart
+import de.sleeptracker.app.ui.components.ChartLegend
+import de.sleeptracker.app.ui.components.LegendItem
+import de.sleeptracker.app.ui.components.LegendKind
+import de.sleeptracker.app.ui.components.TrendChart
+import de.sleeptracker.app.ui.components.TrendLine
 import de.sleeptracker.app.ui.components.BarEntry
 import de.sleeptracker.app.ui.components.ChartPanel
 import de.sleeptracker.app.ui.components.EstimateNote
@@ -243,6 +248,9 @@ private fun shortLabel(s: SleepSession, period: StatPeriod): String {
     }
 }
 
+/** Y-axis label for hour values. */
+private fun hoursAxis(v: Float): String = if (v % 1f == 0f) "%.0f h".format(v) else "%.1f h".format(v)
+
 @Composable
 fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
     val c = LocalContext.current.container
@@ -397,17 +405,22 @@ private fun DurationPanel(st: StatsUiState, onOpenReport: (Long) -> Unit) {
         },
     ) { expanded ->
         val hours = st.nights.map { it.estimatedSleepMinutes / 60f }
-        BarChart(
-            st.nights.map { n ->
-                BarEntry(
-                    shortLabel(n, st.period), n.estimatedSleepMinutes / 60f, durationText(n.estimatedSleepMinutes),
-                    color = if (n.estimatedSleepMinutes >= st.goalMinutes) primary else primary.copy(alpha = 0.55f),
-                )
-            },
-            goal = goalH,
-            overlay = DetailedStatisticsCalculator.rollingAverage(hours, 7),
+        val avg = DetailedStatisticsCalculator.rollingAverage(hours, 7)
+        val readouts = st.nights.mapIndexed { i, n ->
+            "${nightDate(n)?.let(Fmt::date) ?: n.sessionDate}: ${durationText(n.estimatedSleepMinutes)} · Ø7 ${durationText((avg[i] * 60).toInt())}"
+        }
+        TrendChart(
+            labels = st.nights.map { shortLabel(it, st.period) },
+            values = hours,
+            color = primary,
+            format = ::hoursAxis,
+            readout = { readouts[it] },
+            secondary = listOf(TrendLine(avg, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f), 1.4f)),
+            reference = goalH,
+            referenceLabel = stringResource(R.string.goal_is, durationText(st.goalMinutes)),
+            barColors = st.nights.map { if (it.estimatedSleepMinutes >= st.goalMinutes) primary else MaterialTheme.colorScheme.onSurfaceVariant },
             zoom = zoom,
-            height = if (expanded) 320.dp else 170.dp,
+            height = if (expanded) 320.dp else 180.dp,
             description = stringResource(R.string.cd_duration_chart),
             onSelect = { picked = it },
         )
@@ -435,16 +448,17 @@ private fun MonthsPanel(st: StatsUiState, onOpenMonth: (LocalDate) -> Unit) {
             }
         },
     ) { expanded ->
-        BarChart(
-            st.months.map { m ->
-                BarEntry(
-                    m.month.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
-                    m.sleepMinutes / 60f,
-                    if (m.nights == 0) "–" else "${durationText(m.sleepMinutes.toInt())} · ${"%.0f".format(m.score)} · ${stringResource(R.string.n_nights, m.nights)}",
-                )
-            },
-            goal = st.goalMinutes / 60f,
-            height = if (expanded) 300.dp else 130.dp,
+        val readouts = st.months.map { m ->
+            "${Fmt.monthYear(m.month)}: " + if (m.nights == 0) "–" else "${durationText(m.sleepMinutes.toInt())} · ${"%.0f".format(m.score)} · ${stringResource(R.string.n_nights, m.nights)}"
+        }
+        TrendChart(
+            labels = st.months.map { it.month.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()) },
+            values = st.months.map { if (it.nights == 0) null else it.sleepMinutes / 60f },
+            color = MaterialTheme.colorScheme.primary,
+            format = ::hoursAxis,
+            readout = { readouts[it] },
+            reference = st.goalMinutes / 60f,
+            height = if (expanded) 300.dp else 150.dp,
             description = stringResource(R.string.monthly_overview),
             onSelect = { picked = it },
         )
@@ -463,16 +477,21 @@ private fun ScorePanel(st: StatsUiState, onOpenReport: (Long) -> Unit) {
             Column(Modifier.weight(1f)) { MetricRow(stringResource(R.string.lowest), "${s.minScore}") }
         }
         if (st.nights.size >= 2) {
-            LineChart(
-                st.nights.map { it.sleepQualityScore.toFloat() },
-                color = MaterialTheme.colorScheme.primary,
+            val readouts = st.nights.map { "${nightDate(it)?.let(Fmt::date) ?: it.sessionDate}: ${it.sleepQualityScore}" }
+            TrendChart(
+                labels = st.nights.map { shortLabel(it, st.period) },
+                values = st.nights.map { it.sleepQualityScore.toFloat() },
+                color = MaterialTheme.colorScheme.secondary,
                 format = { "%.0f".format(it) },
+                readout = { readouts[it] },
+                yRange = 0f..100f,
                 reference = s.avgScore,
+                referenceLabel = "Ø %.0f".format(s.avgScore),
+                barColors = st.nights.map { DataColors.score(it.sleepQualityScore) },
                 zoom = zoom,
-                height = if (expanded) 280.dp else 120.dp,
+                height = if (expanded) 280.dp else 150.dp,
                 description = stringResource(R.string.cd_score_chart),
             )
-            IndexRange(st)
         }
     }
 }
@@ -524,20 +543,28 @@ private fun HabitsPanels(st: StatsUiState) {
 
         val bedZoom = rememberChartZoom(st.nights.size, st.period to st.offset)
         ChartPanel(stringResource(R.string.in_bed_vs_asleep), bedZoom) { expanded ->
-            PairedBarChart(
-                st.nights.map { n ->
-                    PairedEntry(
-                        label = shortLabel(n, st.period),
-                        first = n.timeInBedMinutes / 60f,
-                        second = n.estimatedSleepMinutes / 60f,
-                        display = "${durationText(n.estimatedSleepMinutes)} / ${durationText(n.timeInBedMinutes)} (%.0f %%)".format(n.sleepEfficiency),
-                    )
-                },
-                firstLabel = stringResource(R.string.time_in_bed),
-                secondLabel = stringResource(R.string.asleep),
+            val readouts = st.nights.map { n ->
+                "${shortLabel(n, st.period)}: ${durationText(n.estimatedSleepMinutes)} / ${durationText(n.timeInBedMinutes)} (%.0f %%)".format(n.sleepEfficiency)
+            }
+            val awakeColor = DataColors.stage(de.sleeptracker.core.SleepStage.AWAKE)
+            TrendChart(
+                labels = st.nights.map { shortLabel(it, st.period) },
+                values = st.nights.map { it.estimatedSleepMinutes / 60f },
+                color = DataColors.asleep,
+                format = ::hoursAxis,
+                readout = { readouts[it] },
+                bandUpper = st.nights.map { it.timeInBedMinutes / 60f },
+                bandColor = awakeColor,
+                showBars = false,
                 zoom = bedZoom,
-                height = if (expanded) 300.dp else 140.dp,
+                height = if (expanded) 300.dp else 160.dp,
                 description = stringResource(R.string.cd_in_bed_chart),
+            )
+            ChartLegend(
+                listOf(
+                    LegendItem(DataColors.asleep, stringResource(R.string.asleep), LegendKind.AREA),
+                    LegendItem(awakeColor, stringResource(R.string.legend_in_bed_awake), LegendKind.AREA),
+                ),
             )
         }
     }
@@ -581,21 +608,29 @@ private fun DetailPanels(st: StatsUiState, onOpenReport: (Long) -> Unit) {
 
     SectionCard(stringResource(R.string.sleep_by_weekday)) {
         val names = DayOfWeek.entries.map { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
-        BarChart(
-            d.sleepByWeekday.mapIndexed { i, v -> BarEntry(names[i], (v ?: 0f) / 60f, v?.let { durationText(it.toInt()) } ?: "–") },
-            goal = st.goalMinutes / 60f,
-            height = 120.dp,
+        val readouts = d.sleepByWeekday.mapIndexed { i, v -> "${names[i]}: ${v?.let { durationText(it.toInt()) } ?: "–"}" }
+        TrendChart(
+            labels = names,
+            values = d.sleepByWeekday.map { it?.div(60f) },
+            color = MaterialTheme.colorScheme.primary,
+            format = ::hoursAxis,
+            readout = { readouts[it] },
+            reference = st.goalMinutes / 60f,
+            height = 150.dp,
             description = stringResource(R.string.sleep_by_weekday),
         )
     }
 
     SectionCard(stringResource(R.string.duration_distribution)) {
         val labels = listOf("<5 h", "5–6", "6–7", "7–8", "8–9", "≥9 h")
-        BarChart(
-            d.durationHistogram.mapIndexed { i, n ->
-                BarEntry(labels[i], n.toFloat(), stringResource(R.string.n_nights, n), color = MaterialTheme.colorScheme.secondary)
-            },
-            height = 110.dp,
+        val readouts = d.durationHistogram.mapIndexed { i, n -> "${labels[i]}: ${stringResource(R.string.n_nights, n)}" }
+        TrendChart(
+            labels = labels,
+            values = d.durationHistogram.map { it.toFloat() },
+            color = MaterialTheme.colorScheme.secondary,
+            format = { "%.0f".format(it) },
+            readout = { readouts[it] },
+            height = 140.dp,
             description = stringResource(R.string.duration_distribution),
         )
     }
@@ -664,10 +699,16 @@ private fun EnvironmentStatsCard(st: StatsUiState) {
         if (noisy.size >= 2) {
             Spacer(Modifier.height(6.dp))
             SectionLabel(stringResource(R.string.noise_per_night_chart))
-            BarChart(
-                noisy.map { BarEntry(shortLabel(it, st.period), (it.avgNoiseDb + st.noiseCalibration).coerceAtLeast(0f), dbText(it.avgNoiseDb, st.noiseCalibration), DataColors.sound(de.sleeptracker.core.SoundEventType.NOISE_OTHER)) },
+            val readouts = noisy.map { "${shortLabel(it, st.period)}: ${dbText(it.avgNoiseDb, st.noiseCalibration)}" }
+            TrendChart(
+                labels = noisy.map { shortLabel(it, st.period) },
+                values = noisy.map { it.avgNoiseDb + st.noiseCalibration },
+                color = de.sleeptracker.app.ui.components.LayerColors.noise,
+                format = { "%.0f dB".format(it) },
+                readout = { readouts[it] },
+                includeZero = false,
                 zoom = zoom,
-                height = if (expanded) 260.dp else 110.dp,
+                height = if (expanded) 260.dp else 140.dp,
                 description = stringResource(R.string.cd_noise_chart),
             )
         }
@@ -675,9 +716,15 @@ private fun EnvironmentStatsCard(st: StatsUiState) {
         if (lit.size >= 2) {
             Spacer(Modifier.height(6.dp))
             SectionLabel(stringResource(R.string.dark_per_night_chart))
-            BarChart(
-                lit.map { BarEntry(shortLabel(it, st.period), it.darkPercent, "%.0f %%".format(it.darkPercent), DataColors.light) },
-                height = if (expanded) 220.dp else 100.dp,
+            val readouts = lit.map { "${shortLabel(it, st.period)}: ${"%.0f %%".format(it.darkPercent)}" }
+            TrendChart(
+                labels = lit.map { shortLabel(it, st.period) },
+                values = lit.map { it.darkPercent },
+                color = DataColors.light,
+                format = { "%.0f%%".format(it) },
+                readout = { readouts[it] },
+                yRange = 0f..100f,
+                height = if (expanded) 220.dp else 130.dp,
                 description = stringResource(R.string.cd_light_chart),
             )
         }

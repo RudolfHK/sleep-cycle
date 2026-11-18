@@ -49,6 +49,7 @@ import de.sleeptracker.audio.SoundEpisode
 import de.sleeptracker.core.SleepStage
 import kotlin.math.abs
 import kotlin.math.log10
+import kotlin.math.roundToInt
 
 /** Colours for the environment layers, shared by all night charts and legends. */
 object LayerColors {
@@ -306,17 +307,13 @@ private fun DrawScope.drawSeries(
     var segment = ArrayList<Offset>()
     fun flush() {
         if (segment.size >= 2) {
-            val line = Path().apply { moveTo(segment.first().x, segment.first().y); segment.drop(1).forEach { lineTo(it.x, it.y) } }
+            val line = splinePath(segment)
             if (filled) {
-                val area = Path().apply {
-                    moveTo(segment.first().x, h)
-                    segment.forEach { lineTo(it.x, it.y) }
-                    lineTo(segment.last().x, h)
-                    close()
-                }
-                drawPath(area, color.copy(alpha = 0.22f))
+                val area = splinePath(segment)
+                area.lineTo(segment.last().x, h); area.lineTo(segment.first().x, h); area.close()
+                drawPath(area, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(color.copy(alpha = 0.32f), color.copy(alpha = 0.04f))))
             }
-            drawPath(line, color, style = Stroke(width = if (filled) 1.5f else 2.2f))
+            drawPath(line, color, style = Stroke(width = if (filled) 1.5f else 2.2f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
         }
         segment = ArrayList()
     }
@@ -382,10 +379,10 @@ fun PhaseStackChart(
             while (hr < maxMin) { val y = h - hr / maxMin * h; drawLine(grid, Offset(0f, y), Offset(w, y), 1f); hr += 120 }
             if (nights.isEmpty()) return@Canvas
             val slot = win.slot(w)
-            val bw = (slot * 0.72f).coerceAtLeast(1.5f)
+            val bw = minOf(slot * 0.6f, 24.dp.toPx()).coerceAtLeast(1.5f)
             for (i in win.visibleIndices(nights.size)) {
                 val n = nights[i]
-                val x = win.x(i, w) + (slot - bw) / 2
+                val x = (win.x(i, w) + (slot - bw) / 2).roundToInt().toFloat()
                 val alpha = if (selected == null || selected == i) 1f else 0.4f
                 var y = h
                 if (!n.hasPhases) {
@@ -405,16 +402,12 @@ fun PhaseStackChart(
                 }
             }
             fun overlay(values: List<Float?>, norm: (Float) -> Float, color: Color) {
-                var path: Path? = null
-                for (i in win.visibleIndices(nights.size)) {
-                    val v = values[i]
-                    val px = win.x(i, w) + slot / 2
-                    if (v == null) { path?.let { drawPath(it, color, style = Stroke(2f)) }; path = null; continue }
-                    val py = h - norm(v).coerceIn(0f, 1f) * h * 0.95f
-                    path = (path ?: Path().apply { moveTo(px, py) }).apply { lineTo(px, py) }
-                    drawCircle(color, 3f, Offset(px, py))
+                val vis = win.visibleIndices(nights.size)
+                val pts = vis.map { i -> values[i]?.let { Offset(win.x(i, w) + slot / 2, h - norm(it).coerceIn(0f, 1f) * h * 0.95f) } }
+                smoothSegments(pts).forEach { seg ->
+                    if (seg.size >= 2) drawPath(splinePath(seg), color, style = Stroke(2.2f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    seg.forEach { drawCircle(color, 2.8f, it) }
                 }
-                path?.let { drawPath(it, color, style = Stroke(2f)) }
             }
             if (showNoise) overlay(nights.map { it.noiseDb }, { (it - dbMin) / (dbMax - dbMin) }, LayerColors.noise)
             if (showDark) overlay(nights.map { it.darkPercent }, { it / 100f }, LayerColors.light)
@@ -461,28 +454,34 @@ fun ProfileChart(
             val h = size.height
             val sw = w / slots.size
             val order = listOf(SleepStage.DEEP, SleepStage.LIGHT, SleepStage.REM, SleepStage.AWAKE)
+            // Smooth stacked areas: boundary k = cumulative share of the first k stages, scaled by
+            // the share of nights in bed at that time.
+            val cum = Array(order.size + 1) { FloatArray(slots.size) }
             slots.forEachIndexed { i, s ->
-                if (s.nightsInBed == 0) return@forEachIndexed
-                // Column height = share of nights in bed at that time; stages fill it.
-                val colH = s.nightsInBed.toFloat() / maxNights * h
-                var y = h
-                for (st in order) {
-                    val bh = (s.share[st] ?: 0f) * colH
-                    drawRect(DataColors.stage(st).copy(alpha = if (selected == null || selected == i) 0.9f else 0.45f), Offset(i * sw, y - bh), Size(sw + 0.5f, bh))
-                    y -= bh
-                }
+                val colH = s.nightsInBed.toFloat() / maxNights
+                var acc = 0f
+                cum[0][i] = 0f
+                order.forEachIndexed { k, st -> acc += (s.share[st] ?: 0f) * colH; cum[k + 1][i] = acc }
             }
+            fun boundary(k: Int) = slots.indices.map { i -> Offset(i * sw + sw / 2, h - cum[k][i] * h) }
+            // Extend to the chart edges so the areas fill the full width.
+            fun edged(pts: List<Offset>) = listOf(Offset(0f, pts.first().y)) + pts + Offset(w, pts.last().y)
+            order.forEachIndexed { k, st ->
+                val upper = edged(boundary(k + 1))
+                val lower = edged(boundary(k))
+                val path = splinePath(upper)
+                splinePath(lower.reversed(), path, moveFirst = false)
+                path.close()
+                drawPath(path, DataColors.stage(st).copy(alpha = 0.82f))
+            }
+            selected?.let { i -> drawRect(Color.White.copy(alpha = 0.06f), Offset(i * sw, 0f), Size(sw, h)) }
             // Hour ticks.
             slots.forEachIndexed { i, s -> if (s.startMinute % 120 == 0) drawLine(grid, Offset(i * sw, 0f), Offset(i * sw, h), 1f) }
             fun line(values: List<Float?>, norm: (Float) -> Float, color: Color) {
-                var path: Path? = null
-                values.forEachIndexed { i, v ->
-                    val px = i * sw + sw / 2
-                    if (v == null) { path?.let { drawPath(it, color, style = Stroke(2.2f)) }; path = null; return@forEachIndexed }
-                    val py = h - norm(v).coerceIn(0f, 1f) * h * 0.95f
-                    path = (path ?: Path().apply { moveTo(px, py) }).apply { lineTo(px, py) }
+                val pts = values.mapIndexed { i, v -> v?.let { Offset(i * sw + sw / 2, h - norm(it).coerceIn(0f, 1f) * h * 0.95f) } }
+                smoothSegments(pts).forEach { seg ->
+                    if (seg.size >= 2) drawPath(splinePath(seg), color, style = Stroke(2.4f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
                 }
-                path?.let { drawPath(it, color, style = Stroke(2.2f)) }
             }
             if (showNoise) line(slots.map { it.noiseDb }, { (it - dbMin) / (dbMax - dbMin) }, LayerColors.noise)
             if (showLight) line(slots.map { it.lux }, { luxNorm(it, maxLux) }, LayerColors.light)

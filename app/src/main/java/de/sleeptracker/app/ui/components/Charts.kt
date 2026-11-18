@@ -47,6 +47,7 @@ import de.sleeptracker.core.SleepStage
 import de.sleeptracker.core.SoundEventType
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 data class StageRun(val startMillis: Long, val durationMillis: Long, val stage: SleepStage)
 
@@ -295,15 +296,19 @@ fun BarChart(
             for (k in 1..3) drawLine(grid, Offset(0f, size.height * k / 4f), Offset(size.width, size.height * k / 4f), 1f)
             if (entries.isEmpty()) return@Canvas
             val slot = win.slot(size.width)
-            val bw = (slot * 0.7f).coerceAtLeast(1.5f)
+            // Width capped so few bars do not become blocks; edges snapped to whole pixels.
+            val bw = minOf(slot * 0.55f, 22.dp.toPx()).coerceAtLeast(1.5f)
             for (i in win.visibleIndices(entries.size)) {
                 val e = entries[i]
                 val h = e.value / max * size.height
                 val c = e.color ?: barColor
+                val center = win.x(i, size.width) + slot / 2
+                val left = (center - bw / 2).roundToInt().toFloat()
+                val right = (center + bw / 2).roundToInt().toFloat()
                 drawRoundRect(
                     color = if (selected == null || selected == i) c else c.copy(alpha = 0.35f),
-                    topLeft = Offset(win.x(i, size.width) + (slot - bw) / 2, size.height - h),
-                    size = Size(bw, h),
+                    topLeft = Offset(left, (size.height - h).roundToInt().toFloat()),
+                    size = Size((right - left).coerceAtLeast(1f), h),
                     cornerRadius = CornerRadius(minOf(bw / 6, 3f)),
                 )
             }
