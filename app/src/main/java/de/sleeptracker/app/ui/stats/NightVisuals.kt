@@ -200,7 +200,7 @@ fun PhaseStackPanel(st: StatsUiState) {
 
 /** Typical night: when each stage usually happens, with noise and light by clock time. */
 @Composable
-fun ProfilePanel(profile: NightProfile?, calibration: Int) {
+fun ProfilePanel(profile: NightProfile?, calibration: Int, skipped: Int = 0) {
     if (profile == null || profile.slots.isEmpty() || profile.totalNights < 2) return
     val hasNoise = profile.slots.any { it.noiseDb != null }
     val hasLight = profile.slots.any { it.lux != null }
@@ -209,6 +209,14 @@ fun ProfilePanel(profile: NightProfile?, calibration: Int) {
     val stageInitials = listOf(SleepStage.DEEP, SleepStage.LIGHT, SleepStage.REM, SleepStage.AWAKE).map { it to stageName(it).take(1) }
     ChartPanel(stringResource(R.string.typical_night), zoom = null) { expanded ->
         ChartDescription(stringResource(R.string.typical_night_desc, profile.totalNights))
+        if (skipped > 0) {
+            Text(
+                stringResource(R.string.typical_night_skipped, skipped),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
         val chips = buildList { if (hasNoise) add(NightLayer.NOISE); if (hasLight) add(NightLayer.LIGHT) }
         if (chips.isNotEmpty()) {
             LayerChips(chips, buildSet { if (showNoise) add(NightLayer.NOISE); if (showLight) add(NightLayer.LIGHT) }, { layerName(it) }) {

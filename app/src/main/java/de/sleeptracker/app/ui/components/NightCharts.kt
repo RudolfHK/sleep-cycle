@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.drawText
 import de.sleeptracker.analysis.NightProfile
 import de.sleeptracker.app.ui.Fmt
 import de.sleeptracker.app.ui.stageName
@@ -436,61 +437,94 @@ fun ProfileChart(
     val slots = profile.slots
     val ink = MaterialTheme.colorScheme.onSurface
     val grid = MaterialTheme.colorScheme.outlineVariant
-    val maxNights = (slots.maxOfOrNull { it.nightsInBed } ?: 1).coerceAtLeast(1)
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val dbs = slots.mapNotNull { it.noiseDb }
     val dbMin = dbs.minOrNull() ?: 0f
     val dbMax = maxOf(dbs.maxOrNull() ?: 1f, dbMin + 6f)
     val maxLux = maxOf(slots.mapNotNull { it.lux }.maxOrNull() ?: 10f, 10f)
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val axisStyle = androidx.compose.ui.text.TextStyle(fontSize = 9.sp, color = muted)
+    val axisPx = with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.toPx() }
+    val bottomPx = with(androidx.compose.ui.platform.LocalDensity.current) { 14.dp.toPx() }
     Column(modifier) {
         ReadoutBar(selected?.let { slots.getOrNull(it) }?.let { readout(it) })
         Canvas(
-            Modifier.fillMaxWidth().height(height).clipToBounds().semantics { contentDescription = description }
+            Modifier.fillMaxWidth().height(height + 14.dp).clipToBounds().semantics { contentDescription = description }
                 .pointerInput(profile) {
-                    detectTapGestures { p -> if (slots.isNotEmpty()) selected = (p.x / size.width * slots.size).toInt().coerceIn(0, slots.size - 1) }
+                    detectTapGestures { p ->
+                        if (slots.isNotEmpty()) {
+                            val f = ((p.x - axisPx) / (size.width - axisPx)).coerceIn(0f, 0.9999f)
+                            selected = (f * slots.size).toInt()
+                        }
+                    }
                 },
         ) {
             if (slots.isEmpty()) return@Canvas
-            val w = size.width
-            val h = size.height
+            val w = size.width - axisPx
+            val h = size.height - bottomPx
             val sw = w / slots.size
+            fun xOf(i: Int) = axisPx + i * sw + sw / 2
+            fun yOf(f: Float) = h - f.coerceIn(0f, 1f) * h
+
+            // Y grid: share of all nights in bed.
+            for (k in 0..2) {
+                val f = k / 2f
+                drawLine(grid, Offset(axisPx, yOf(f)), Offset(size.width, yOf(f)), 1f)
+                val t = textMeasurer.measure("${(f * 100).roundToInt()}%", axisStyle)
+                drawText(t, topLeft = Offset(axisPx - t.size.width - 4f, (yOf(f) - t.size.height / 2f).coerceIn(0f, h - t.size.height)))
+            }
+
+            // Stacked areas. Boundaries are sampled densely from monotone splines and clamped so
+            // that each boundary is never below the one under it: bands cannot cross or overlap.
             val order = listOf(SleepStage.DEEP, SleepStage.LIGHT, SleepStage.REM, SleepStage.AWAKE)
-            // Smooth stacked areas: boundary k = cumulative share of the first k stages, scaled by
-            // the share of nights in bed at that time.
-            val cum = Array(order.size + 1) { FloatArray(slots.size) }
-            slots.forEachIndexed { i, s ->
-                val colH = s.nightsInBed.toFloat() / maxNights
-                var acc = 0f
-                cum[0][i] = 0f
-                order.forEachIndexed { k, st -> acc += (s.share[st] ?: 0f) * colH; cum[k + 1][i] = acc }
-            }
-            fun boundary(k: Int) = slots.indices.map { i -> Offset(i * sw + sw / 2, h - cum[k][i] * h) }
-            // Extend to the chart edges so the areas fill the full width.
-            fun edged(pts: List<Offset>) = listOf(Offset(0f, pts.first().y)) + pts + Offset(w, pts.last().y)
+            val nodeX = FloatArray(slots.size + 2)
+            nodeX[0] = axisPx
+            slots.indices.forEach { nodeX[it + 1] = xOf(it) }
+            nodeX[slots.size + 1] = size.width
+            val step = 2f
+            val sampleCount = ((size.width - axisPx) / step).toInt().coerceAtLeast(2) + 1
+            val sx = FloatArray(sampleCount) { axisPx + it * (size.width - axisPx) / (sampleCount - 1) }
+            var lower = FloatArray(sampleCount)
             order.forEachIndexed { k, st ->
-                val upper = edged(boundary(k + 1))
-                val lower = edged(boundary(k))
-                val path = splinePath(upper)
-                splinePath(lower.reversed(), path, moveFirst = false)
+                val nodes = FloatArray(slots.size + 2)
+                slots.forEachIndexed { i, s ->
+                    var acc = 0f
+                    for (q in 0..k) acc += (s.share[order[q]] ?: 0f)
+                    nodes[i + 1] = acc * s.coverage
+                }
+                nodes[0] = nodes[1]
+                nodes[slots.size + 1] = nodes[slots.size]
+                val upper = de.sleeptracker.analysis.MonotoneSpline.sample(nodeX, nodes, sx)
+                for (j in upper.indices) upper[j] = upper[j].coerceIn(lower[j], 1f)
+                val path = Path()
+                path.moveTo(sx[0], yOf(upper[0]))
+                for (j in 1 until sampleCount) path.lineTo(sx[j], yOf(upper[j]))
+                for (j in sampleCount - 1 downTo 0) path.lineTo(sx[j], yOf(lower[j]))
                 path.close()
-                drawPath(path, DataColors.stage(st).copy(alpha = 0.82f))
+                drawPath(path, DataColors.stage(st).copy(alpha = 0.85f))
+                lower = upper
             }
-            selected?.let { i -> drawRect(Color.White.copy(alpha = 0.06f), Offset(i * sw, 0f), Size(sw, h)) }
-            // Hour ticks.
-            slots.forEachIndexed { i, s -> if (s.startMinute % 120 == 0) drawLine(grid, Offset(i * sw, 0f), Offset(i * sw, h), 1f) }
+
+            // Hour grid and labels every 2 hours.
+            slots.forEachIndexed { i, s ->
+                if (s.startMinute % 120 == 0) {
+                    val x = axisPx + i * sw
+                    drawLine(grid.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, h), 1f)
+                    val t = textMeasurer.measure(Fmt.minuteOfDay((s.startMinute + 18 * 60) % 1440), axisStyle)
+                    drawText(t, topLeft = Offset((x - t.size.width / 2f).coerceIn(axisPx, size.width - t.size.width), h + 2f))
+                }
+            }
             fun line(values: List<Float?>, norm: (Float) -> Float, color: Color) {
-                val pts = values.mapIndexed { i, v -> v?.let { Offset(i * sw + sw / 2, h - norm(it).coerceIn(0f, 1f) * h * 0.95f) } }
+                val pts = values.mapIndexed { i, v -> v?.let { Offset(xOf(i), h - norm(it).coerceIn(0f, 1f) * h * 0.95f) } }
                 smoothSegments(pts).forEach { seg ->
                     if (seg.size >= 2) drawPath(splinePath(seg), color, style = Stroke(2.4f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
                 }
             }
             if (showNoise) line(slots.map { it.noiseDb }, { (it - dbMin) / (dbMax - dbMin) }, LayerColors.noise)
             if (showLight) line(slots.map { it.lux }, { luxNorm(it, maxLux) }, LayerColors.light)
-            selected?.let { drawLine(ink, Offset(it * sw + sw / 2, 0f), Offset(it * sw + sw / 2, h), 1.5f) }
-        }
-        if (slots.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val marks = listOf(slots.first(), slots[slots.size / 2], slots.last())
-                marks.forEach { Text(Fmt.minuteOfDay((it.startMinute + 18 * 60) % 1440), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            selected?.let {
+                drawRect(Color.White.copy(alpha = 0.07f), Offset(axisPx + it * sw, 0f), Size(sw, h))
+                drawLine(ink, Offset(xOf(it), 0f), Offset(xOf(it), h), 1.5f)
             }
         }
     }

@@ -24,6 +24,8 @@ data class ProfileSlot(
     val noiseDb: Float?,
     /** Mean lux, null without data. */
     val lux: Float?,
+    /** Smoothed share (0..1) of all nights that were in bed in this slot; used for drawing. */
+    val coverage: Float = 0f,
 )
 
 data class NightProfile(val slotMinutes: Int, val totalNights: Int, val slots: List<ProfileSlot>)
@@ -38,7 +40,18 @@ object NightProfileCalculator {
     fun minutesSinceEvening(millis: Long, zoneOffsetMinutes: Int): Int =
         Math.floorMod(Math.floorMod(millis / 60_000L + zoneOffsetMinutes, 1440L).toInt() - 18 * 60, 1440)
 
-    fun compute(nights: List<ProfileNight>, slotMinutes: Int = 15): NightProfile {
+    /** Main sleep only: ≥ 3 h in bed and starting between 18:00 and 06:00 local time. */
+    fun isMainSleep(startMillis: Long, timeInBedMinutes: Int, zoneOffsetMinutes: Int): Boolean {
+        if (timeInBedMinutes < 180) return false
+        val minuteOfDay = Math.floorMod(startMillis / 60_000L + zoneOffsetMinutes, 1440L).toInt()
+        return minuteOfDay >= 18 * 60 || minuteOfDay < 6 * 60
+    }
+
+    /**
+     * @param minCoverage leading/trailing slots with fewer than this share of nights in bed are cut.
+     * @param smooth half-width (slots) of the light temporal smoothing of the stage shares.
+     */
+    fun compute(nights: List<ProfileNight>, slotMinutes: Int = 15, minCoverage: Float = 0.15f, smooth: Int = 1): NightProfile {
         val slots = 1440 / slotMinutes
         // Per slot: majority stage per night → counts.
         val stageCounts = Array(slots) { IntArray(SleepStage.entries.size) }
@@ -79,18 +92,26 @@ object NightProfileCalculator {
                 if (cLux[s] > 0) { luxSum[s] += nLux[s] / cLux[s]; luxN[s]++ }
             }
         }
+        val total = nights.size.coerceAtLeast(1)
         val out = (0 until slots).map { s ->
+            // Light smoothing over neighbouring slots, weighted by how many nights were in bed.
+            val window = (s - smooth..s + smooth).filter { it in 0 until slots }
+            val bedSum = window.sumOf { inBed[it] }
             ProfileSlot(
                 startMinute = s * slotMinutes,
                 nightsInBed = inBed[s],
-                share = SleepStage.entries.associateWith { st -> if (inBed[s] == 0) 0f else stageCounts[s][st.ordinal].toFloat() / inBed[s] },
+                share = SleepStage.entries.associateWith { st ->
+                    if (bedSum == 0 || inBed[s] == 0) 0f else window.sumOf { stageCounts[it][st.ordinal] }.toFloat() / bedSum
+                },
                 noiseDb = if (noiseN[s] > 0) (10 * log10(noiseEnergy[s] / noiseN[s])).toFloat() else null,
                 lux = if (luxN[s] > 0) (luxSum[s] / luxN[s]).toFloat() else null,
+                coverage = if (inBed[s] == 0) 0f else bedSum.toFloat() / window.size / total,
             )
         }
-        // Trim to the slots where at least one night was in bed.
-        val first = out.indexOfFirst { it.nightsInBed > 0 }
-        val last = out.indexOfLast { it.nightsInBed > 0 }
+        // Trim leading/trailing slots that only a few nights reach (stray early/late recordings).
+        val needed = maxOf(1, kotlin.math.ceil(minCoverage * nights.size).toInt())
+        val first = out.indexOfFirst { it.nightsInBed >= needed }
+        val last = out.indexOfLast { it.nightsInBed >= needed }
         return NightProfile(slotMinutes, nights.size, if (first < 0) emptyList() else out.subList(first, last + 1))
     }
 }

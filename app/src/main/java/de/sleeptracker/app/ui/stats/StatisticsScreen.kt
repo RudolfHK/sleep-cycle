@@ -125,6 +125,8 @@ data class StatsUiState(
     val dayDetails: SessionDetails? = null,
     /** Typical-night profile over recorded nights of the period (not for Day). */
     val profile: NightProfile? = null,
+    /** Recorded nights left out of the profile (shorter than 3 h or started during the day). */
+    val profileSkipped: Int = 0,
     val insights: List<Insight> = emptyList(),
 )
 
@@ -206,8 +208,13 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
         val dayDetails = if (period == StatPeriod.DAY) {
             nights.lastOrNull { it.hasPhaseData }?.let { runCatching { c.sleep.details(it.id) }.getOrNull() }
         } else null
+        var profileSkipped = 0
         val profile = if (period != StatPeriod.DAY) {
-            val recorded = nights.filter { it.hasPhaseData }.takeLast(PROFILE_MAX_NIGHTS)
+            // Only main sleep: short or daytime recordings (e.g. early test runs) would distort it.
+            val withPhases = nights.filter { it.hasPhaseData }
+            val main = withPhases.filter { NightProfileCalculator.isMainSleep(it.startTimestamp, it.timeInBedMinutes, it.zoneOffsetMinutes) }
+            profileSkipped = withPhases.size - main.size
+            val recorded = main.takeLast(PROFILE_MAX_NIGHTS)
             val signals = c.database.signalDao()
             NightProfileCalculator.compute(
                 recorded.map { n ->
@@ -229,7 +236,7 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
             period = period, offset = offset, from = from, to = to, stats = stats, previous = previous,
             detailed = DetailedStatisticsCalculator.compute(records, goal),
             nights = nights, months = months, goalMinutes = goal,
-            dayDetails = dayDetails, profile = profile,
+            dayDetails = dayDetails, profile = profile, profileSkipped = profileSkipped,
             insights = if (period == StatPeriod.DAY) emptyList() else InsightsCalculator.compute(records),
         )
     }
@@ -292,7 +299,7 @@ fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
         KpiGrid(st)
         if (st.period != StatPeriod.DAY) {
             PhaseStackPanel(st)
-            ProfilePanel(st.profile, st.noiseCalibration)
+            ProfilePanel(st.profile, st.noiseCalibration, st.profileSkipped)
             InsightsPanel(st.insights, s.nights, st.noiseCalibration)
         }
         DurationPanel(st, onOpenReport)

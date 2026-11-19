@@ -383,7 +383,7 @@
     <string name="typical_night">Your typical night</string>
     <string name="typical_night_desc">Based on %1$d recorded nights. For every 15 minutes of clock time, the colours show in how many nights you were in each phase; the column height shows how often you were in bed at that time. Lines show average noise and light at that time.</string>
     <string name="readout_nobody_in_bed">not in bed</string>
-    <string name="typical_night_height_hint">Full height = every night of the period. Imported nights are not included.</string>
+    <string name="typical_night_height_hint">Height = share of all nights in bed at that time (100 % = every night). Light smoothing over ±15 min. Imported nights are not included.</string>
     <string name="insights">Insights</string>
     <string name="insights_need_more">Insights need at least %1$d nights in the period (now %2$d).</string>
     <string name="insights_caution">Comparisons within your own nights, split at the median. They show associations, not causes, and become more reliable with more nights.</string>
@@ -401,4 +401,5 @@
     <string name="stop_saving">Saving and analysing your night…</string>
     <string name="stop_failed">The night could not be analysed. Your data is kept – open the Sleep tab to analyse it again.</string>
     <string name="legend_in_bed_awake">In bed, awake</string>
+    <string name="typical_night_skipped">%1$d short or daytime recordings (under 3 h, or started between 06:00 and 18:00) are not included.</string>
 </resources>

@@ -26,8 +26,41 @@ class ProfileInsightsTest {
     }
 
     @Test
+    fun mainSleepFilter() {
+        val h = 3_600_000L
+        val day = monday + 2 * 24 * h
+        assertTrue(NightProfileCalculator.isMainSleep(day - h, 480, 0))        // 23:00, 8 h
+        assertTrue(NightProfileCalculator.isMainSleep(day + 2 * h, 300, 0))    // 02:00
+        assertTrue(!NightProfileCalculator.isMainSleep(day + 15 * h, 240, 0))  // 15:00 nap/test
+        assertTrue(!NightProfileCalculator.isMainSleep(day - h, 60, 0))        // too short
+        assertTrue(NightProfileCalculator.isMainSleep(day + 21 * h, 400, 60))  // 22:00 UTC = 23:00 local
+    }
+
+    @Test
+    fun strayEdgeSlotsAreTrimmedAndSmoothingKeepsSums() {
+        // 9 normal nights plus one that starts 2 h earlier: the extra early slots are cut.
+        val nights = (0 until 9).map(::night) + night(9).let { n ->
+            n.copy(runs = listOf(Triple(n.runs.first().first - 2 * h, 2 * h, SleepStage.LIGHT)) + n.runs)
+        }
+        val p = NightProfileCalculator.compute(nights)
+        assertEquals(300, p.slots.first().startMinute)
+        assertTrue(p.slots.all { s -> s.nightsInBed == 0 || kotlin.math.abs(s.share.values.sum() - 1f) < 1e-4f })
+        assertTrue(p.slots.all { it.coverage in 0f..1f })
+    }
+
+    @Test
+    fun splineSampling() {
+        val xs = floatArrayOf(0f, 1f, 2f)
+        val ys = floatArrayOf(0f, 1f, 0f)
+        val at = floatArrayOf(-1f, 0f, 0.5f, 1f, 1.5f, 2f, 3f)
+        val out = MonotoneSpline.sample(xs, ys, at)
+        assertEquals(0f, out[0], 1e-6f); assertEquals(1f, out[3], 1e-6f); assertEquals(0f, out[6], 1e-6f)
+        for (k in at.indices) assertEquals(MonotoneSpline.evaluate(xs, ys, at[k]), out[k], 1e-5f)
+    }
+
+    @Test
     fun profileSharesNoiseAndTrim() {
-        val p = NightProfileCalculator.compute((0 until 4).map(::night))
+        val p = NightProfileCalculator.compute((0 until 4).map(::night), smooth = 0)
         assertEquals(4, p.totalNights)
         // First slot 23:00 (300 min after 18:00), last slot 06:15.
         assertEquals(300, p.slots.first().startMinute)

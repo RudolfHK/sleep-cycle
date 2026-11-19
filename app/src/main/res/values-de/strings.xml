@@ -382,7 +382,7 @@
     <string name="typical_night">Deine typische Nacht</string>
     <string name="typical_night_desc">Basierend auf %1$d aufgezeichneten Nächten. Für jede Viertelstunde Uhrzeit zeigen die Farben, in wie vielen Nächten du in welcher Phase warst; die Säulenhöhe zeigt, wie oft du zu dieser Zeit im Bett warst. Linien zeigen durchschnittliches Geräusch und Licht zu dieser Zeit.</string>
     <string name="readout_nobody_in_bed">nicht im Bett</string>
-    <string name="typical_night_height_hint">Volle Höhe = jede Nacht des Zeitraums. Importierte Nächte sind nicht enthalten.</string>
+    <string name="typical_night_height_hint">Höhe = Anteil aller Nächte, die zu dieser Zeit im Bett waren (100 % = jede Nacht). Leicht über ±15 Min. geglättet. Importierte Nächte sind nicht enthalten.</string>
     <string name="insights">Erkenntnisse</string>
     <string name="insights_need_more">Erkenntnisse brauchen mindestens %1$d Nächte im Zeitraum (aktuell %2$d).</string>
     <string name="insights_caution">Vergleiche innerhalb deiner eigenen Nächte, am Median geteilt. Sie zeigen Zusammenhänge, keine Ursachen, und werden mit mehr Nächten zuverlässiger.</string>
@@ -400,4 +400,5 @@
     <string name="stop_saving">Deine Nacht wird gespeichert und ausgewertet …</string>
     <string name="stop_failed">Die Nacht konnte nicht ausgewertet werden. Deine Daten bleiben erhalten – im Tab Schlaf kannst du sie erneut auswerten.</string>
     <string name="legend_in_bed_awake">Im Bett, wach</string>
+    <string name="typical_night_skipped">%1$d kurze oder tagsüber gestartete Aufnahmen (unter 3 h oder Beginn zwischen 06:00 und 18:00) sind nicht enthalten.</string>
 </resources>

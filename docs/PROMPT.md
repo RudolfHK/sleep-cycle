@@ -478,3 +478,33 @@ Refined prompt:
 > **Implementation.** `MonotoneSpline` (pure Kotlin, unit tested: interpolates
 > nodes, preserves monotonic segments, no overshoot, handles 1–2 points) and a
 > reusable `TrendChart` composable used by every statistics trend.
+
+---
+
+# Iteration 9 — fix "Your typical night"
+
+Original feedback (German): *"Die Grafiken und Visualisierungen sind deutlich
+besser, allerdings ist die Abbildung 'Deine typische Nacht' immer noch etwas
+verbuggt. Vielleicht liegt das daran, dass das noch mit Daten vom alten
+Repo-Stand aufgenommen wurde. Bitte fixen."*
+
+Refined prompt:
+
+> **Diagnosis.** (1) Every stored night enters the profile, including short
+> test recordings made during the day while the app was being developed; one
+> 15:00 recording stretches the clock axis into the afternoon and adds isolated
+> spikes. (2) Edge slots covered by a single night of many produce thin
+> spikes. (3) Each stacked boundary is smoothed independently, so neighbouring
+> boundaries can cross between slots → overlapping / flickering colour bands.
+> (4) Only three axis labels, not aligned with the hour grid; no y-axis meaning.
+>
+> **Fix.**
+> * Only *main sleep* nights: ≥ 3 h in bed and starting between 18:00 and 06:00
+>   local time (unit tested); the description states how many nights were used
+>   and how many were skipped.
+> * Trim leading/trailing slots where fewer than 15 % of the nights are in bed.
+> * Light temporal smoothing (±1 slot, weighted by nights in bed) before drawing;
+>   shares still sum to 100 %.
+> * Draw the stacked areas from densely sampled spline boundaries that are
+>   clamped to be non-decreasing (lower ≤ upper everywhere) — no crossings.
+> * Hour labels at every 2-hour grid line, y-axis "0 / 50 / 100 % of nights".

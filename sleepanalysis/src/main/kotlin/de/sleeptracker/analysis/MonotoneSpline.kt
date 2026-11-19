@@ -63,5 +63,28 @@ object MonotoneSpline {
             (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1]
     }
 
+    /** Evaluates the spline at many increasing [at] positions in one pass. */
+    fun sample(xs: FloatArray, ys: FloatArray, at: FloatArray): FloatArray {
+        val n = xs.size
+        val out = FloatArray(at.size)
+        if (n == 0) return out
+        if (n == 1) { out.fill(ys[0]); return out }
+        val m = tangents(xs, ys)
+        var i = 0
+        for (k in at.indices) {
+            val x = at[k]
+            if (x <= xs[0]) { out[k] = ys[0]; continue }
+            if (x >= xs[n - 1]) { out[k] = ys[n - 1]; continue }
+            while (i < n - 2 && x > xs[i + 1]) i++
+            val h = xs[i + 1] - xs[i]
+            val t = (x - xs[i]) / h
+            val t2 = t * t
+            val t3 = t2 * t
+            out[k] = (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] +
+                (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1]
+        }
+        return out
+    }
+
     internal fun near(a: Float, b: Float) = abs(a - b) < 1e-4f
 }
