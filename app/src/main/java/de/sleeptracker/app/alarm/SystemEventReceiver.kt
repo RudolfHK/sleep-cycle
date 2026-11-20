@@ -36,6 +36,7 @@ class SystemEventReceiver : BroadcastReceiver() {
                     AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
                     -> c.alarmScheduler.restore()
                 }
+                runCatching { de.sleeptracker.app.reminders.BedtimeReminder.reschedule(context) }
             } finally {
                 pending.finish()
             }

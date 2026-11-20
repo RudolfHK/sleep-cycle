@@ -43,6 +43,11 @@ data class UserSettings(
     val weightRegularity: Int = 10,
     val createdAt: Long = System.currentTimeMillis(),
     val lightTrackingEnabled: Boolean = true,
+    // v6
+    val bedtimeReminderEnabled: Boolean = false,
+    /** Reminder this many minutes before the calculated bedtime. */
+    val bedtimeReminderLeadMinutes: Int = 30,
+    val positionCheckEnabled: Boolean = true,
     /** Added to dBFS to show an (uncalibrated) estimate of the sound level in dB. */
     val noiseCalibrationDb: Int = 90,
 )
@@ -129,6 +134,12 @@ data class SleepSession(
     val externalRegularity: Int = -1,
     /** v4: light-sensor readings received during the night; −1 = light not tracked. */
     val lightReadings: Int = -1,
+    // v6: breathing rate (estimate)
+    val avgBreathingRate: Float = -1f,
+    val breathingSd: Float = -1f,
+    val breathingMinutes: Int = 0,
+    /** Comma-separated BreathingSummary.Flag names. */
+    val breathingFlags: String = "",
 ) {
     /** Recorded by this app, so a hypnogram and 30-s epochs exist. */
     val hasPhaseData: Boolean get() = source == SOURCE_APP
@@ -177,6 +188,7 @@ data class SleepEpochRecord(
     val lightLux: Float = -1f,
     val lightMaxLux: Float = -1f,
     val hasLight: Boolean = false,
+    val breathsPerMinute: Float = -1f,
 )
 
 @Serializable

@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SleepStatistics::class,
         RecordingMetadata::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,8 +36,24 @@ abstract class AppDatabase : RoomDatabase() {
             Room.databaseBuilder(context, AppDatabase::class.java, "sleep.db")
                 // WAL keeps writes during the night cheap and crash-safe.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
+
+        /** v6: breathing rate, bedtime reminder and position-check settings. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf(
+                    "ALTER TABLE sleep_epoch ADD COLUMN breathsPerMinute REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_session ADD COLUMN avgBreathingRate REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_session ADD COLUMN breathingSd REAL NOT NULL DEFAULT -1",
+                    "ALTER TABLE sleep_session ADD COLUMN breathingMinutes INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE sleep_session ADD COLUMN breathingFlags TEXT NOT NULL DEFAULT ''",
+                    "ALTER TABLE user_settings ADD COLUMN bedtimeReminderEnabled INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE user_settings ADD COLUMN bedtimeReminderLeadMinutes INTEGER NOT NULL DEFAULT 30",
+                    "ALTER TABLE user_settings ADD COLUMN positionCheckEnabled INTEGER NOT NULL DEFAULT 1",
+                ).forEach(db::execSQL)
+            }
+        }
 
         /** v5: sound events become episodes (count and sound time per stored event). */
         val MIGRATION_4_5 = object : Migration(4, 5) {

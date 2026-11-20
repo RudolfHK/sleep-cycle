@@ -36,6 +36,8 @@ data class NightRecord(
     val darkPercent: Float? = null,
     /** False for imported nights without a hypnogram. */
     val hasPhases: Boolean = true,
+    /** Average breaths per minute, null when not measured. */
+    val avgBreathingRate: Float? = null,
 ) {
     /** Time the user fell asleep (estimated). */
     val sleepOnsetMillis: Long get() = startMillis + latencyMinutes * 60_000L

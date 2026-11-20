@@ -46,7 +46,8 @@ class RuntimeStore(private val context: Context) {
     private val keyAlarmPlan = stringPreferencesKey("alarm_plan")
     private val keyOnboarding = booleanPreferencesKey("onboarding_done")
     private val keyEnvBackfill = booleanPreferencesKey("environment_backfill_v2")
-    private val keyAnalysisVersion = androidx.datastore.preferences.core.intPreferencesKey("analysis_version")
+private val keyAnalysisVersion = androidx.datastore.preferences.core.intPreferencesKey("analysis_version")
+    private val keyMonthlyReport = stringPreferencesKey("last_monthly_report")
 
     val activeSessionId: Flow<Long?> = context.runtimeDataStore.data.map { it[keyActiveSession]?.takeIf { id -> id > 0 } }
     val alarmPlan: Flow<AlarmPlan?> = context.runtimeDataStore.data.map { p -> p[keyAlarmPlan]?.let(::decode) }
@@ -81,6 +82,12 @@ class RuntimeStore(private val context: Context) {
 
     suspend fun setEnvironmentBackfillDone() {
         context.runtimeDataStore.edit { it[keyEnvBackfill] = true }
+    }
+
+    suspend fun lastMonthlyReport(): String? = context.runtimeDataStore.data.first()[keyMonthlyReport]
+
+    suspend fun setLastMonthlyReport(month: String) {
+        context.runtimeDataStore.edit { it[keyMonthlyReport] = month }
     }
 
     suspend fun analysisVersion(): Int = context.runtimeDataStore.data.first()[keyAnalysisVersion] ?: 0

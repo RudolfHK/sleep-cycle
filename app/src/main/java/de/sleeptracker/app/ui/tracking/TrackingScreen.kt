@@ -151,6 +151,7 @@ fun TrackingScreen(onFinished: (Long?) -> Unit) {
                     )
                 }
                 s.currentNoiseDb?.let { add(stringResource(R.string.live_noise, de.sleeptracker.app.ui.journal.dbText(it, calibration))) }
+                s.currentBreathing?.let { add(stringResource(R.string.live_breathing, it)) }
             }
             if (env.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))

@@ -16,6 +16,7 @@ import de.sleeptracker.app.ui.theme.SleepTheme
 sealed interface LaunchTarget {
     data class Report(val sessionId: Long) : LaunchTarget
     data object Tracking : LaunchTarget
+    data class MonthlyReport(val month: String) : LaunchTarget
 }
 
 class MainActivity : AppCompatActivity() {
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         launchTarget.value = when {
             report > 0 -> LaunchTarget.Report(report)
             intent.getBooleanExtra(EXTRA_OPEN_TRACKING, false) -> LaunchTarget.Tracking
+            intent.getStringExtra(EXTRA_MONTHLY_REPORT) != null -> LaunchTarget.MonthlyReport(intent.getStringExtra(EXTRA_MONTHLY_REPORT)!!)
             else -> launchTarget.value
         }
     }
@@ -52,5 +54,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_REPORT_SESSION = "report_session"
         const val EXTRA_OPEN_TRACKING = "open_tracking"
+        const val EXTRA_MONTHLY_REPORT = "monthly_report"
     }
 }

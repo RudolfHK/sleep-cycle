@@ -91,7 +91,7 @@ import java.time.LocalDate
 val WAKE_WINDOWS = listOf(10, 15, 20, 30, 45, 60, 90)
 
 @Composable
-fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onOpenSettings: () -> Unit) {
+fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onOpenSettings: () -> Unit, onOpenStatistics: () -> Unit = {}) {
     val context = LocalContext.current
     val c = context.container
     val vm: SleepViewModel = viewModel { SleepViewModel(c) }
@@ -120,9 +120,12 @@ fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onO
         }
     }
 
+    var showPositionCheck by rememberSaveable { mutableStateOf(false) }
+    fun proceed() { if (state.user.positionCheckEnabled) showPositionCheck = true else doStart() }
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         refresh++
-        doStart()
+        proceed()
     }
     val ringtoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
@@ -138,7 +141,7 @@ fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onO
             if (state.user.soundTrackingEnabled && !SystemChecks.mic(context)) add(Manifest.permission.RECORD_AUDIO)
             if (Build.VERSION.SDK_INT >= 33 && !SystemChecks.notifications(context)) add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (needed.isEmpty()) doStart() else permissionLauncher.launch(needed.toTypedArray())
+        if (needed.isEmpty()) proceed() else permissionLauncher.launch(needed.toTypedArray())
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -292,6 +295,15 @@ fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onO
                 }
             }
 
+            if (state.trendConcerns > 0) {
+                Row(
+                    Modifier.fillMaxWidth().clickable(onClick = onOpenStatistics),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NoticeBanner(listOf(stringResource(R.string.trend_hint, state.trendConcerns)), Modifier.weight(1f))
+                }
+            }
+
             state.lastSession?.let { s ->
                 SectionCard(stringResource(R.string.last_night)) {
                     Row(Modifier.fillMaxWidth().clickable { onOpenReport(s.id) }, verticalAlignment = Alignment.CenterVertically) {
@@ -340,6 +352,15 @@ fun SleepScreen(onTrackingStarted: () -> Unit, onOpenReport: (Long) -> Unit, onO
                 }
             }
         }
+    }
+
+    if (showPositionCheck) {
+        de.sleeptracker.app.ui.tools.PositionCheckDialog(
+            soundEnabled = state.user.soundTrackingEnabled,
+            motionEnabled = state.user.motionTrackingEnabled,
+            onStart = { showPositionCheck = false; doStart() },
+            onDismiss = { showPositionCheck = false },
+        )
     }
 
     if (showTimePicker) {

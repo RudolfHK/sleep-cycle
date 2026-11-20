@@ -79,6 +79,8 @@ data class Epoch(
     /** Brightest reading in lux (−1 when no light sensor data). */
     val lightMaxLux: Float = -1f,
     val hasLight: Boolean = false,
+    /** Estimated breaths per minute in this epoch, −1 when not measured. */
+    val breathsPerMinute: Float = -1f,
 ) {
     val hasSignal: Boolean get() = hasMotion || hasSound
 }

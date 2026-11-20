@@ -87,6 +87,7 @@ data class LiveTrackingStatus(
     /** Mean level of the last epoch in dBFS, null when no audio. */
     val currentNoiseDb: Float? = null,
     val lightReadings: Int = 0,
+    val currentBreathing: Float? = null,
 )
 
 /**
@@ -122,6 +123,9 @@ class SleepTrackingService : Service(), SensorEventListener {
     @Volatile private var motionActive = false
     @Volatile private var lightActive = false
     @Volatile private var lastLux = -1f
+    private val breathing = de.sleeptracker.audio.BreathingRateEstimator(FRAME.toFloat() / SAMPLE_RATE)
+    private var breathingFrames = 0
+    @Volatile private var currentBreathing: Float? = null
     private var lightSensor: Sensor? = null
     private var lightRegisteredAt = 0L
     private val lightReadings = java.util.concurrent.atomic.AtomicInteger(0)
@@ -358,6 +362,14 @@ class SleepTrackingService : Service(), SensorEventListener {
                 val ts = System.currentTimeMillis() - FRAME * 1000L / SAMPLE_RATE
                 val r = detector.process(buffer, ts)
                 synchronized(lock) { aggregator?.onAudioFrame(ts, r.levelDb, r.active) }
+                // Breathing rhythm from the level above the background, estimated every ~30 s.
+                breathing.add(r.levelDb - r.floorDb)
+                if (++breathingFrames >= BREATHING_EVERY_FRAMES) {
+                    breathingFrames = 0
+                    val est = breathing.estimate()
+                    currentBreathing = est?.breathsPerMinute
+                    if (est != null) synchronized(lock) { aggregator?.onBreathing(ts, est.breathsPerMinute) }
+                }
                 r.event?.let { handleSoundEvent(it) }
             }
             detector.flush()?.let { handleSoundEvent(it) }
@@ -595,6 +607,7 @@ class SleepTrackingService : Service(), SensorEventListener {
             lightActive = lightActive,
             currentLux = lastLux,
             lightReadings = lightReadings.get(),
+            currentBreathing = currentBreathing,
             currentNoiseDb = synchronized(lock) { nightEpochs.lastOrNull()?.takeIf { it.hasSound }?.soundLevelDb },
         )
         val text = buildString {
@@ -637,6 +650,7 @@ class SleepTrackingService : Service(), SensorEventListener {
         const val FRAME = 1024
         private const val FLUSH_INTERVAL_MILLIS = 5 * 60_000L
         private const val LIGHT_REFRESH_MILLIS = 3 * 60_000L
+        private const val BREATHING_EVERY_FRAMES = 469 // ≈ 30 s of 64 ms frames
         private const val EXCERPT_INTERVAL_MILLIS = 3 * 60_000L
         private const val MAX_TRACKING_MILLIS = 16 * 3_600_000L
 

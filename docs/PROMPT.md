@@ -508,3 +508,68 @@ Refined prompt:
 > * Draw the stacked areas from densely sampled spline boundaries that are
 >   clamped to be non-decreasing (lower ≤ upper everywhere) — no crossings.
 > * Hour labels at every 2-hour grid line, y-axis "0 / 50 / 100 % of nights".
+
+---
+
+# Iteration 10 — twelve new features
+
+Original request: sound-sensitivity setup guide (German: "eine Beschreibung, wie
+man die Geräuschempfindlichkeit einstellt"), phone position check, breathing
+rate, bedtime reminder, tag impact, trend alerts, chronotype, Sleep Regularity
+Index, monthly report, encrypted backup, clean-up of test recordings,
+diagnostics screen — all in the app's dark/orange design.
+
+Refined prompt (all offline, all analysis in pure-Kotlin modules with tests,
+German + English strings, existing panel/chip/chart components only):
+
+> 1. **Sound sensitivity guide.** Expandable help in Settings → Sound detection:
+>    what the slider does (threshold above the room's background, shown in dB),
+>    step-by-step tuning (start at 50 %, check the episode count after a night,
+>    aim for 10–30, raise if snoring/talking is missed, lower if many noises),
+>    phone placement and a link to the diagnostics mic meter for a live test.
+> 2. **Phone position check.** After *Start* (skippable, setting), a 12-second
+>    check samples microphone, accelerometer, proximity and light, then shows a
+>    result list: mic blocked / room too loud / breathing detected or not /
+>    phone covered (proximity) / face down / phone being held (moving) / lying
+>    on a hard surface (motion detection limited) — each OK, info or warning,
+>    with "Start tracking" and "Check again". Assessment is a tested pure function.
+> 3. **Breathing rate.** Per minute, autocorrelation of the audio envelope
+>    (level above the noise floor) over the last 60 s for periods of 2–7.5 s
+>    (8–30 breaths/min); accepted only with correlation ≥ 0.35. Stored per epoch
+>    (migration v6). Per night: average, variability, measured minutes; flags:
+>    low (< 10), high (> 24), irregular (CV > 20 %), different from your usual
+>    (> 3/min from the median of previous nights). Report card with chart and
+>    a clear "not a medical measurement" note; trend in statistics.
+> 4. **Bedtime reminder.** Setting with lead time (0/15/30/45 min). Bedtime =
+>    wake-up time − sleep goal − your average time to fall asleep. Daily
+>    notification "Go to bed by 23:15 to get 8 h", action *Start tracking*.
+>    Re-scheduled after boot, time/zone change and settings changes.
+> 5. **Tag impact.** For every journal tag with ≥ 2 nights with and ≥ 2 without:
+>    difference in score, deep sleep and time to fall asleep; sorted by effect.
+> 6. **Trend alerts.** Last 30 days vs. the 30 days before (≥ 5 nights each):
+>    snoring time, bedtime drift, efficiency, sleep duration, score, time to
+>    fall asleep, breathing rate; shown when the change exceeds a meaningful
+>    threshold. Card in statistics and a hint on the Sleep screen.
+> 7. **Chronotype.** MCTQ-style corrected mid-sleep on free days
+>    (MSFsc = MSF − ½·(SD_free − SD_work) if longer on free days); categories
+>    from extreme early to extreme late; needs ≥ 2 weekend and ≥ 2 weekday nights.
+> 8. **Sleep Regularity Index.** Standard SRI (−100…100): probability of being in
+>    the same sleep/wake state 24 h apart, per minute, only for pairs of days
+>    that both have a recording (app nights use stages, imported nights onset →
+>    wake).
+> 9. **Monthly report.** List of months → page with KPIs vs. previous month,
+>    highlights (best/worst night, streak, goal %), trend alerts, top tag
+>    impacts, chronotype and SRI; notification on the first app start in a new
+>    month.
+> 10. **Encrypted backup.** Password (≥ 8 chars, entered twice) → PBKDF2-HMAC-
+>     SHA256 (210 000 iterations, random salt) → AES-256-GCM over the backup ZIP;
+>     file header "SLPENC1"; restore detects it and asks for the password; wrong
+>     password gives a clear error.
+> 11. **Clean-up.** Settings → Data → list of sessions < 3 h or started
+>     06:00–18:00 (and interrupted ones), select/select all, delete with
+>     recordings, confirmation.
+> 12. **Diagnostics.** Live mic meter (level, background, detection threshold
+>     line from the current sensitivity), accelerometer, light, proximity,
+>     permissions (mic, notifications, exact alarm, full screen, battery),
+>     tracking-service state, last night's data counts (epochs, light readings,
+>     sound episodes), storage.

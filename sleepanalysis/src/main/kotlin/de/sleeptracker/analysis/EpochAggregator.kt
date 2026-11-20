@@ -24,6 +24,7 @@ class EpochAggregator(
     private var events = 0
     private var snoreSeconds = 0f
     private var peakDb = -100f
+    private var breathing = -1f
     // Light is an on-change sensor: the last reading is carried into following epochs.
     private var lastLux = -1f
     private var luxSum = 0.0
@@ -52,6 +53,12 @@ class EpochAggregator(
         if (active) activeFrames++
         energySum += 10.0.pow(levelDb / 10.0)
         if (levelDb > peakDb) peakDb = levelDb
+    }
+
+    /** Latest breathing-rate estimate (breaths/min) for the current epoch. */
+    fun onBreathing(timestampMillis: Long, breathsPerMinute: Float) {
+        advanceTo(timestampMillis)
+        breathing = breathsPerMinute
     }
 
     fun onLight(timestampMillis: Long, lux: Float) {
@@ -112,6 +119,7 @@ class EpochAggregator(
             lightLux = if (luxCount > 0) (luxSum / luxCount).toFloat() else -1f,
             lightMaxLux = if (luxCount > 0) luxMax else -1f,
             hasLight = lightEnabled && luxCount > 0,
+            breathsPerMinute = breathing,
         )
     }
 
@@ -124,6 +132,7 @@ class EpochAggregator(
         events = 0
         snoreSeconds = 0f
         peakDb = -100f
+        breathing = -1f
         motionSamplesSeen = false
         // Start the next epoch with the carried-over light value.
         if (lastLux >= 0f) {

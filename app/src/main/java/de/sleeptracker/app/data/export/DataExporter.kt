@@ -113,9 +113,31 @@ class DataExporter(
     private fun csv(v: String) = "\"" + v.replace("\"", "\"\"").replace('\n', ' ') + "\""
 
     /** ZIP with all data and decrypted excerpts (so it can be restored on another device). */
-    suspend fun createBackup(uri: Uri) = withContext(Dispatchers.IO) {
-        val data = collect(includeSignals = true)
+    /**
+     * Writes a backup ZIP. With a [password] the whole ZIP is encrypted (PBKDF2 + AES-GCM) so it can
+     * be moved to another phone safely.
+     */
+    suspend fun createBackup(uri: Uri, password: CharArray? = null) = withContext(Dispatchers.IO) {
+        val zipBytes = java.io.ByteArrayOutputStream()
+        writeZip(zipBytes)
+        val bytes = if (password != null) de.sleeptracker.importer.BackupCrypto.encrypt(zipBytes.toByteArray(), password) else zipBytes.toByteArray()
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open destination")
+        out.use { it.write(bytes) }
+    }
+
+    class PasswordRequiredException : Exception("Backup is password protected")
+
+    /** True when the file at [uri] is a password-protected backup. */
+    suspend fun isEncryptedBackup(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val head = ByteArray(8)
+            val n = input.read(head)
+            n > 0 && de.sleeptracker.importer.BackupCrypto.isEncrypted(head.copyOf(n))
+        } ?: false
+    }
+
+    private suspend fun writeZip(out: java.io.OutputStream) {
+        val data = collect(includeSignals = true)
         ZipOutputStream(out).use { zip ->
             zip.putNextEntry(ZipEntry(BACKUP_JSON))
             zip.write(json.encodeToString(BackupData.serializer(), data).toByteArray())
@@ -130,11 +152,15 @@ class DataExporter(
     }
 
     /** Replaces all local data with the backup content. */
-    suspend fun restoreBackup(uri: Uri): Int = withContext(Dispatchers.IO) {
+    suspend fun restoreBackup(uri: Uri, password: CharArray? = null): Int = withContext(Dispatchers.IO) {
         var data: BackupData? = null
         val audio = HashMap<String, ByteArray>()
-        val input = context.contentResolver.openInputStream(uri) ?: error("Cannot open backup")
-        ZipInputStream(input).use { zip ->
+        val raw = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Cannot open backup")
+        val zipBytes = if (de.sleeptracker.importer.BackupCrypto.isEncrypted(raw)) {
+            if (password == null) throw PasswordRequiredException()
+            de.sleeptracker.importer.BackupCrypto.decrypt(raw, password)
+        } else raw
+        ZipInputStream(java.io.ByteArrayInputStream(zipBytes)).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 val name = entry.name

@@ -23,6 +23,8 @@ data class SleepUiState(
     val lastSession: SleepSession? = null,
     val interrupted: List<SleepSession> = emptyList(),
     val tracking: Boolean = false,
+    /** Number of unfavourable trends over the last 30 days. */
+    val trendConcerns: Int = 0,
 )
 
 class SleepViewModel(private val c: AppContainer) : ViewModel() {
@@ -41,6 +43,8 @@ class SleepViewModel(private val c: AppContainer) : ViewModel() {
             interrupted = unfinished.filter { it.sessionStatus == SessionStatus.INTERRUPTED || (live == null && it.sessionStatus == SessionStatus.ACTIVE && !SleepTrackingService.isRunning) },
             tracking = live != null,
         )
+    }.combine(c.sleep.observeCompleted().map { all -> de.sleeptracker.app.data.repo.AnalysisInputs.trends(all).count { it.concern } }) { st, n ->
+        st.copy(trendConcerns = n)
     }.combine(c.tracking.finalizing) { st, fin ->
         // A night that is being saved right now is not "interrupted".
         if (fin == null) st else st.copy(interrupted = st.interrupted.filter { it.id != fin })

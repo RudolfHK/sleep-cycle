@@ -9,6 +9,7 @@ import de.sleeptracker.app.container
 class MaintenanceWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try {
         applicationContext.container.recordings.deleteExpired()
+        de.sleeptracker.app.reminders.MonthlyReportNotifier.checkAndNotify(applicationContext)
         Result.success()
     } catch (e: Exception) {
         Result.retry()

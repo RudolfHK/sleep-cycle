@@ -72,6 +72,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".reminders.BedtimeReminderReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".alarm.SystemEventReceiver"
             android:exported="true">
             <intent-filter>

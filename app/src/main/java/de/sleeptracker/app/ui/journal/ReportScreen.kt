@@ -346,6 +346,8 @@ fun ReportScreen(sessionId: Long, onBack: () -> Unit, onDeleted: () -> Unit) {
 
             EnvironmentCard(d, calibration)
 
+            if (s.hasPhaseData) BreathingCard(d)
+
             previous?.let { p -> ComparisonCard(s, p) }
 
             JournalCard(d) { note, mood, tags -> vm.saveJournal(note, mood, tags) }
@@ -444,6 +446,52 @@ private fun durationSecondsText(seconds: Long): String =
 
 fun dbText(dbfs: Float, calibration: Int) = "%.0f dB".format(dbfs + calibration)
 fun luxText(lux: Float) = if (lux < 10f) "%.1f lx".format(lux) else "%.0f lx".format(lux)
+
+/** Breathing rate estimated from the breathing/snoring rhythm in the audio. */
+@Composable
+private fun BreathingCard(d: SessionDetails) {
+    val s = d.session
+    SectionCard(stringResource(R.string.breathing_rate)) {
+        if (s.avgBreathingRate <= 0f) {
+            Text(stringResource(R.string.breathing_not_measured), style = MaterialTheme.typography.bodySmall)
+            return@SectionCard
+        }
+        StatGrid(
+            listOf(
+                stringResource(R.string.average) to "%.1f /min".format(s.avgBreathingRate),
+                stringResource(R.string.breathing_variability) to "± %.1f".format(s.breathingSd),
+                stringResource(R.string.breathing_measured) to durationText(s.breathingMinutes),
+            ),
+        )
+        val values = d.epochs.map { if (it.breathsPerMinute > 0f) it.breathsPerMinute else Float.NaN }
+        if (values.count { !it.isNaN() } >= 4) {
+            LineChart(
+                values,
+                color = MaterialTheme.colorScheme.tertiary,
+                format = { "%.0f /min".format(it) },
+                reference = s.avgBreathingRate,
+                description = stringResource(R.string.breathing_rate),
+            )
+            TimeAxis(s.startTimestamp, s.endTimestamp ?: s.startTimestamp)
+        }
+        val flags = s.breathingFlags.split(",").filter { it.isNotBlank() }
+        flags.forEach { f ->
+            Text(
+                "• " + stringResource(
+                    when (f) {
+                        "LOW" -> R.string.breathing_flag_low
+                        "HIGH" -> R.string.breathing_flag_high
+                        "IRREGULAR" -> R.string.breathing_flag_irregular
+                        else -> R.string.breathing_flag_unusual
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = DataColors.warn,
+            )
+        }
+        Text(stringResource(R.string.breathing_disclaimer), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
 
 @Composable
 private fun HeroFigure(label: String, value: String) {

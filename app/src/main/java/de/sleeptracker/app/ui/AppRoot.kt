@@ -48,6 +48,10 @@ private enum class Tab(val route: String, val label: Int, val icon: ImageVector)
 object Routes {
     const val TRACKING = "tracking"
     const val RECORDINGS = "recordings"
+    const val DIAGNOSTICS = "diagnostics"
+    const val CLEANUP = "cleanup"
+    const val MONTHLY = "monthly"
+    fun monthly(month: String) = "monthly/$month"
     fun report(id: Long) = "report/$id"
 }
 
@@ -62,6 +66,7 @@ fun AppRoot(launchTarget: LaunchTarget?, onLaunchHandled: () -> Unit) {
         when (launchTarget) {
             is LaunchTarget.Report -> nav.navigate(Routes.report(launchTarget.sessionId)) { launchSingleTop = true }
             LaunchTarget.Tracking -> nav.navigate(Routes.TRACKING) { launchSingleTop = true }
+            is LaunchTarget.MonthlyReport -> nav.navigate(Routes.monthly(launchTarget.month)) { launchSingleTop = true }
             null -> return@LaunchedEffect
         }
         onLaunchHandled()
@@ -103,11 +108,30 @@ fun AppRoot(launchTarget: LaunchTarget?, onLaunchHandled: () -> Unit) {
                     onTrackingStarted = { nav.navigate(Routes.TRACKING) },
                     onOpenReport = { nav.navigate(Routes.report(it)) },
                     onOpenSettings = { nav.navigate(Tab.SETTINGS.route) },
+                    onOpenStatistics = { nav.navigate(Tab.STATS.route) },
                 )
             }
             composable(Tab.JOURNAL.route) { JournalScreen(onOpen = { nav.navigate(Routes.report(it)) }) }
-            composable(Tab.STATS.route) { StatisticsScreen(onOpenReport = { nav.navigate(Routes.report(it)) }) }
-            composable(Tab.SETTINGS.route) { SettingsScreen(onOpenRecordings = { nav.navigate(Routes.RECORDINGS) }) }
+            composable(Tab.STATS.route) {
+                StatisticsScreen(onOpenReport = { nav.navigate(Routes.report(it)) }, onOpenMonthly = { nav.navigate(Routes.MONTHLY) })
+            }
+            composable(Tab.SETTINGS.route) {
+                SettingsScreen(
+                    onOpenRecordings = { nav.navigate(Routes.RECORDINGS) },
+                    onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
+                    onOpenCleanup = { nav.navigate(Routes.CLEANUP) },
+                    onOpenMonthly = { nav.navigate(Routes.MONTHLY) },
+                )
+            }
+            composable(Routes.DIAGNOSTICS) { de.sleeptracker.app.ui.tools.DiagnosticsScreen(onBack = { nav.popBackStack() }) }
+            composable(Routes.CLEANUP) { de.sleeptracker.app.ui.tools.CleanupScreen(onBack = { nav.popBackStack() }) }
+            composable(Routes.MONTHLY) {
+                de.sleeptracker.app.ui.stats.MonthlyReportsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(Routes.monthly(it)) })
+            }
+            composable("monthly/{month}") { entry ->
+                val month = entry.arguments?.getString("month") ?: return@composable
+                de.sleeptracker.app.ui.stats.MonthlyReportScreen(month, onBack = { nav.popBackStack() }, onOpenReport = { nav.navigate(Routes.report(it)) })
+            }
             composable(Routes.TRACKING) {
                 TrackingScreen(
                     onFinished = { id ->

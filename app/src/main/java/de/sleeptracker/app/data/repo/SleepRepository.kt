@@ -123,7 +123,13 @@ class SleepRepository(
         val events = signals.soundEvents(sessionId).filter { it.isReportable() }
         fun soundSeconds(e: SoundEventRecord) = if (e.soundSeconds > 0f) e.soundSeconds else e.durationSeconds
         val env = EnvironmentAnalyzer.analyze(epochs, summary.sleepOnsetMillis)
+        val usualBreathing = previous.map { it.avgBreathingRate }.filter { it > 0f }
+        val breathing = de.sleeptracker.analysis.BreathingAnalyzer.summarize(epochs.map { it.breathsPerMinute }, usualBreathing)
         val updated = session.withEnvironment(env).copy(
+            avgBreathingRate = breathing?.averageRate ?: -1f,
+            breathingSd = breathing?.sd ?: -1f,
+            breathingMinutes = breathing?.minutesMeasured ?: 0,
+            breathingFlags = breathing?.flags?.joinToString(",") { it.name } ?: "",
             endTimestamp = end,
             timeInBedMinutes = summary.timeInBedMinutes,
             estimatedSleepMinutes = summary.sleepMinutes,
@@ -324,6 +330,7 @@ fun SleepSession.toNightRecord() = NightRecord(
     avgLux = avgLux.takeIf { hasLightData },
     darkPercent = darkPercent.takeIf { hasLightData && it >= 0f },
     hasPhases = hasPhaseData,
+    avgBreathingRate = avgBreathingRate.takeIf { it > 0f },
 )
 
 fun Epoch.toRecord(sessionId: Long) = SleepEpochRecord(
@@ -341,6 +348,7 @@ fun Epoch.toRecord(sessionId: Long) = SleepEpochRecord(
     lightLux = lightLux,
     lightMaxLux = lightMaxLux,
     hasLight = hasLight,
+    breathsPerMinute = breathsPerMinute,
 )
 
 fun SleepEpochRecord.toEpoch() = Epoch(
@@ -357,4 +365,5 @@ fun SleepEpochRecord.toEpoch() = Epoch(
     lightLux = lightLux,
     lightMaxLux = lightMaxLux,
     hasLight = hasLight,
+    breathsPerMinute = breathsPerMinute,
 )

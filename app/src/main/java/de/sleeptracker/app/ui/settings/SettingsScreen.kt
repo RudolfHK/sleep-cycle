@@ -13,6 +13,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
@@ -89,7 +98,12 @@ private val SNOOZE_DURATIONS = listOf(1, 2, 5, 10, 15, 20)
 private val RETENTION = listOf(0, 7, 14, 30, 90)
 
 @Composable
-fun SettingsScreen(onOpenRecordings: () -> Unit) {
+fun SettingsScreen(
+    onOpenRecordings: () -> Unit,
+    onOpenDiagnostics: () -> Unit = {},
+    onOpenCleanup: () -> Unit = {},
+    onOpenMonthly: () -> Unit = {},
+) {
     val context = LocalContext.current
     val c = context.container
     val vm: SettingsViewModel = viewModel { SettingsViewModel(c) }
@@ -120,6 +134,17 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
     }
     val backup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) runIo { c.exporter.createBackup(uri) }
+    }
+    // Encrypted backup: password first, then the file location.
+    var backupPassword by remember { mutableStateOf<CharArray?>(null) }
+    var askBackupPassword by remember { mutableStateOf(false) }
+    var askRestorePassword by remember { mutableStateOf(false) }
+    var showSensitivityGuide by remember { mutableStateOf(false) }
+    val msgWrongPassword = stringResource(R.string.backup_wrong_password)
+    val encryptedBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pw = backupPassword
+        backupPassword = null
+        if (uri != null && pw != null) runIo { c.exporter.createBackup(uri, pw); pw.fill(' ') }
     }
     var restoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var importPreview by remember { mutableStateOf<de.sleeptracker.app.data.importer.ImportPreview?>(null) }
@@ -221,10 +246,47 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             ) { v ->
                 vm.user { it.copy(soundSensitivity = v) }
             }
+            SensitivityGuide(expanded = showSensitivityGuide, onToggle = { showSensitivityGuide = !showSensitivityGuide }, onOpenDiagnostics = onOpenDiagnostics)
+            SettingSwitch(
+                stringResource(R.string.position_check_setting), user.positionCheckEnabled,
+                { v -> vm.user { it.copy(positionCheckEnabled = v) } },
+                subtitle = stringResource(R.string.position_check_setting_hint),
+            )
             SettingSlider(stringResource(R.string.sleep_goal), user.sleepGoalMinutes.toFloat(), durationText(user.sleepGoalMinutes), 300f..660f, steps = 23) { v ->
                 vm.user { it.copy(sleepGoalMinutes = (v / 15).toInt() * 15) }
             }
             Text(stringResource(R.string.placement_text), style = MaterialTheme.typography.bodySmall)
+        }
+
+        SectionCard(stringResource(R.string.settings_reminders)) {
+            SettingSwitch(
+                stringResource(R.string.bedtime_reminder), user.bedtimeReminderEnabled,
+                { v -> vm.user { it.copy(bedtimeReminderEnabled = v) } },
+                subtitle = stringResource(R.string.bedtime_reminder_hint),
+            )
+            if (user.bedtimeReminderEnabled) {
+                SectionLabelText(stringResource(R.string.bedtime_reminder_lead))
+                ChoiceChips(listOf(0, 15, 30, 45), user.bedtimeReminderLeadMinutes, label = { stringResource(R.string.minutes_short, it) }, onSelect = { m ->
+                    vm.user { it.copy(bedtimeReminderLeadMinutes = m) }
+                })
+                val bed = de.sleeptracker.app.reminders.BedtimeReminder.bedtimeMinute(alarm.targetWakeTime, user.sleepGoalMinutes, 15)
+                Text(
+                    stringResource(
+                        R.string.bedtime_reminder_preview,
+                        de.sleeptracker.app.ui.Fmt.minuteOfDay(Math.floorMod(bed - user.bedtimeReminderLeadMinutes, 1440)),
+                        de.sleeptracker.app.ui.Fmt.minuteOfDay(bed),
+                        durationText(user.sleepGoalMinutes),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        SectionCard(stringResource(R.string.settings_tools)) {
+            SettingRow(stringResource(R.string.diagnostics), icon = Icons.Filled.MonitorHeart, onClick = onOpenDiagnostics)
+            SettingRow(stringResource(R.string.monthly_reports), icon = Icons.Filled.CalendarMonth, onClick = onOpenMonthly)
+            SettingRow(stringResource(R.string.cleanup_title), icon = Icons.Filled.CleaningServices, onClick = onOpenCleanup)
         }
 
         SectionCard(stringResource(R.string.settings_sound_detection)) {
@@ -287,6 +349,7 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
             SettingRow(stringResource(R.string.export_csv), icon = Icons.Filled.FileDownload) { exportCsv.launch("sleep-$today.csv") }
             SettingRow(stringResource(R.string.export_json), icon = Icons.Filled.FileDownload) { exportJson.launch("sleep-$today.json") }
             SettingRow(stringResource(R.string.create_backup), icon = Icons.Filled.Backup) { backup.launch("sleep-backup-$today.zip") }
+            SettingRow(stringResource(R.string.create_encrypted_backup), icon = Icons.Filled.Lock) { askBackupPassword = true }
             SettingRow(stringResource(R.string.restore_backup), icon = Icons.Filled.Restore) { restore.launch(arrayOf("application/zip", "application/octet-stream")) }
             SettingRow(
                 stringResource(R.string.import_sleep_cycle),
@@ -356,9 +419,125 @@ fun SettingsScreen(onOpenRecordings: () -> Unit) {
         )
         "restore" -> ConfirmDialog(
             stringResource(R.string.restore_backup), stringResource(R.string.restore_text), stringResource(R.string.restore),
-            onConfirm = { restoreUri?.let { u -> runIo { c.exporter.restoreBackup(u) } } }, onDismiss = { confirm = null },
+            onConfirm = {
+                restoreUri?.let { u ->
+                    scope.launch {
+                        if (c.exporter.isEncryptedBackup(u)) askRestorePassword = true
+                        else runIo { c.exporter.restoreBackup(u) }
+                    }
+                }
+            },
+            onDismiss = { confirm = null },
         )
     }
+
+    if (askBackupPassword) {
+        PasswordDialog(
+            title = stringResource(R.string.create_encrypted_backup),
+            confirmTwice = true,
+            onConfirm = { pw -> askBackupPassword = false; backupPassword = pw; encryptedBackup.launch("sleep-backup-$today.slpenc") },
+            onDismiss = { askBackupPassword = false },
+        )
+    }
+    if (askRestorePassword) {
+        PasswordDialog(
+            title = stringResource(R.string.restore_backup),
+            confirmTwice = false,
+            onConfirm = { pw ->
+                askRestorePassword = false
+                val u = restoreUri
+                if (u != null) scope.launch {
+                    val result = runCatching { c.exporter.restoreBackup(u, pw) }
+                    pw.fill(' ')
+                    snackbar.showSnackbar(
+                        when {
+                            result.isSuccess -> msgDone
+                            result.exceptionOrNull() is de.sleeptracker.importer.BackupCrypto.WrongPasswordException -> msgWrongPassword
+                            else -> msgFailed
+                        },
+                    )
+                }
+            },
+            onDismiss = { askRestorePassword = false },
+        )
+    }
+}
+
+@Composable
+private fun SectionLabelText(text: String) {
+    Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+}
+
+/** Step-by-step help for the sound sensitivity slider. */
+@Composable
+private fun SensitivityGuide(expanded: Boolean, onToggle: () -> Unit, onOpenDiagnostics: () -> Unit) {
+    androidx.compose.material3.Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().clickable(onClick = onToggle),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Icon(Icons.Filled.HelpOutline, null, tint = MaterialTheme.colorScheme.primary)
+                androidx.compose.foundation.layout.Spacer(Modifier.padding(start = 8.dp))
+                Text(stringResource(R.string.sensitivity_guide_title), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                androidx.compose.material3.Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
+            }
+            if (expanded) {
+                Text(stringResource(R.string.sensitivity_guide_intro), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                listOf(
+                    R.string.sensitivity_step_1, R.string.sensitivity_step_2, R.string.sensitivity_step_3,
+                    R.string.sensitivity_step_4, R.string.sensitivity_step_5,
+                ).forEachIndexed { i, res ->
+                    Text("${i + 1}. ${stringResource(res)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                }
+                Text(stringResource(R.string.sensitivity_guide_table), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                TextButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.sensitivity_open_diagnostics)) }
+            }
+        }
+    }
+}
+
+/** Password entry for encrypted backups; with [confirmTwice] both fields must match. */
+@Composable
+private fun PasswordDialog(title: String, confirmTwice: Boolean, onConfirm: (CharArray) -> Unit, onDismiss: () -> Unit) {
+    var pw by remember { mutableStateOf("") }
+    var pw2 by remember { mutableStateOf("") }
+    val tooShort = pw.length < de.sleeptracker.importer.BackupCrypto.MIN_PASSWORD_LENGTH
+    val mismatch = confirmTwice && pw != pw2
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                if (confirmTwice) Text(stringResource(R.string.backup_password_hint), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    pw, { pw = it }, label = { Text(stringResource(R.string.password)) }, singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.small,
+                )
+                if (confirmTwice) {
+                    androidx.compose.material3.OutlinedTextField(
+                        pw2, { pw2 = it }, label = { Text(stringResource(R.string.password_repeat)) }, singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        isError = pw2.isNotEmpty() && mismatch,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                if (confirmTwice && pw.isNotEmpty() && tooShort) {
+                    Text(stringResource(R.string.password_too_short, de.sleeptracker.importer.BackupCrypto.MIN_PASSWORD_LENGTH), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(pw.toCharArray()) }, enabled = !(confirmTwice && (tooShort || mismatch)) && pw.isNotEmpty()) { Text(stringResource(R.string.ok)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable

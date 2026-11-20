@@ -8,6 +8,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import de.sleeptracker.app.maintenance.MaintenanceWorker
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -34,6 +35,13 @@ class SleepTrackerApp : Application() {
                     .onSuccess { container.runtime.setAnalysisVersion(ANALYSIS_VERSION) }
             }
         }
+        // Bedtime reminder follows wake-up time, sleep goal and reminder settings.
+        container.appScope.launch {
+            kotlinx.coroutines.flow.combine(container.settings.userSettings, container.settings.alarmSettings) { u, a ->
+                listOf(u.bedtimeReminderEnabled, u.bedtimeReminderLeadMinutes, u.sleepGoalMinutes, a.targetWakeTime)
+            }.distinctUntilChanged().collect { runCatching { de.sleeptracker.app.reminders.BedtimeReminder.reschedule(this@SleepTrackerApp) } }
+        }
+        container.appScope.launch { runCatching { de.sleeptracker.app.reminders.MonthlyReportNotifier.checkAndNotify(this@SleepTrackerApp) } }
         container.appScope.launch {
             if (!container.runtime.environmentBackfillDone()) {
                 runCatching { container.sleep.backfillEnvironment() }.onSuccess { container.runtime.setEnvironmentBackfillDone() }

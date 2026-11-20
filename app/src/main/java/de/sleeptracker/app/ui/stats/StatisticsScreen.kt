@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -128,6 +129,9 @@ data class StatsUiState(
     /** Recorded nights left out of the profile (shorter than 3 h or started during the day). */
     val profileSkipped: Int = 0,
     val insights: List<Insight> = emptyList(),
+    val trendAlerts: List<de.sleeptracker.analysis.TrendAlert> = emptyList(),
+    val trendsEnoughData: Boolean = false,
+    val bundle: de.sleeptracker.app.data.repo.InsightBundle = de.sleeptracker.app.data.repo.InsightBundle(),
 )
 
 class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
@@ -238,6 +242,15 @@ class StatisticsViewModel(private val c: AppContainer) : ViewModel() {
             nights = nights, months = months, goalMinutes = goal,
             dayDetails = dayDetails, profile = profile, profileSkipped = profileSkipped,
             insights = if (period == StatPeriod.DAY) emptyList() else InsightsCalculator.compute(records),
+            trendAlerts = de.sleeptracker.app.data.repo.AnalysisInputs.trends(all),
+            trendsEnoughData = run {
+                val now = System.currentTimeMillis()
+                val d = 86_400_000L * de.sleeptracker.analysis.TrendAlertCalculator.WINDOW_DAYS
+                val m = de.sleeptracker.analysis.TrendAlertCalculator.MIN_NIGHTS
+                all.count { (it.endTimestamp ?: 0) in (now - d)..now } >= m && all.count { (it.endTimestamp ?: 0) in (now - 2 * d) until (now - d) } >= m
+            },
+            bundle = if (period == StatPeriod.DAY) de.sleeptracker.app.data.repo.InsightBundle()
+            else runCatching { de.sleeptracker.app.data.repo.AnalysisInputs.bundle(c.database, nights) }.getOrDefault(de.sleeptracker.app.data.repo.InsightBundle()),
         )
     }
 }
@@ -259,7 +272,7 @@ private fun shortLabel(s: SleepSession, period: StatPeriod): String {
 private fun hoursAxis(v: Float): String = if (v % 1f == 0f) "%.0f h".format(v) else "%.1f h".format(v)
 
 @Composable
-fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
+fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}, onOpenMonthly: () -> Unit = {}) {
     val c = LocalContext.current.container
     val vm: StatisticsViewModel = viewModel { StatisticsViewModel(c) }
     val st by vm.state.collectAsStateWithLifecycle()
@@ -272,7 +285,11 @@ fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
         ScreenHeader(
             stringResource(R.string.tab_statistics),
             subtitle = if (st.from == st.to) Fmt.date(st.from) else "${Fmt.date(st.from)} – ${Fmt.date(st.to)} · ${stringResource(R.string.n_nights, s.nights)}",
-        )
+        ) {
+            IconButton(onClick = onOpenMonthly) {
+                Icon(androidx.compose.material.icons.Icons.Filled.CalendarMonth, stringResource(R.string.monthly_reports), tint = MaterialTheme.colorScheme.primary)
+            }
+        }
         PeriodSelector(st.period, vm::select)
         if (st.period != StatPeriod.ALL) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -301,6 +318,10 @@ fun StatisticsScreen(onOpenReport: (Long) -> Unit = {}) {
             PhaseStackPanel(st)
             ProfilePanel(st.profile, st.noiseCalibration, st.profileSkipped)
             InsightsPanel(st.insights, s.nights, st.noiseCalibration)
+            TrendAlertsCard(st.trendAlerts, st.trendsEnoughData)
+            TagImpactCard(st.bundle.tagImpacts)
+            ChronotypeCard(st.bundle.chronotype)
+            RegularityIndexCard(st.bundle.sri)
         }
         DurationPanel(st, onOpenReport)
         if (st.months.size > 1) MonthsPanel(st, vm::openMonth)
