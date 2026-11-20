@@ -70,6 +70,16 @@ and the typical-night profile uses smoothed stacked areas.
 * Every chart has a description, a legend with units and value ranges, a tap
   read-out, and an explicit "no data" state.
 
+## Tools and insights
+
+* **Phone position check** before tracking: mic, breathing, covered (proximity), face down, held, surface, light.
+* **Breathing rate (estimate)**: autocorrelation of the audio envelope (8–30/min), per night average, variability and flags.
+* **Bedtime reminder**: wake-up time − sleep goal − usual time to fall asleep, minus a chosen lead time.
+* **Tag impact**, **30-day trend alerts**, **chronotype** (MCTQ-style corrected mid-sleep on free days), **Sleep Regularity Index**.
+* **Monthly reports** with highlights, changes and insights; notification for the past month.
+* **Encrypted backup** (PBKDF2-HMAC-SHA256 210 000 iterations + AES-256-GCM, header `SLPENC1`).
+* **Clean-up** of short, daytime and interrupted sessions; **Diagnostics** screen with a live mic meter and detection threshold.
+
 ## Architecture
 
 ```
